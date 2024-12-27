@@ -78,7 +78,7 @@ var fullDeck = [
   const server = require('http').createServer(app);
   const io = require('socket.io')(server, {
     cors: {
-      origin: "https://niloc3.github.io/tabline/",
+      origin: "niloc3.github.io",
       methods: ["GET", "POST"]
     },
     closeOnBeforeunload: true
