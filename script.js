@@ -1,4 +1,5 @@
 var socket = io('https://tabline.onrender.com');
+let collectedCards = [];
 
 socket.on('connect', function () {
   console.log("connected!");
@@ -26,6 +27,10 @@ socket.on('status', function (status) {
   document.body.innerHTML = `<h1>${status}</h1>`;
 });
 
+socket.on('error', function (message) {
+  alert(`Invalid Move: ${message}`);
+});
+
 // Function to update the game UI
 function updateGameUI(data, isYourTurn) {
   document.getElementById('title').style.display = 'none';
@@ -40,7 +45,10 @@ function updateGameUI(data, isYourTurn) {
     document.getElementById('cards').innerHTML += `
       <img class="card" 
            src="./cards/${card.suit}/${card.card}.svg" 
-           onclick="playCard(${card.card}, '${card.suit}')">`;
+           draggable="true" 
+           ondragstart="dragCard(event)" 
+           data-value="${card.card}" 
+           data-suit="${card.suit}">`;
   });
 
   // Populate table cards
@@ -61,23 +69,49 @@ function updateTableCards(tableCards) {
   const tableCardsDiv = document.getElementById('tableCards');
   tableCardsDiv.innerHTML = '';
   tableCards.forEach(card => {
-    tableCardsDiv.innerHTML += `<img class="card" src="./cards/${card.suit}/${card.card}.svg">`;
+    tableCardsDiv.innerHTML += `<img class="card" src="./cards/${card.suit}/${card.card}.svg" data-value="${card.card}" data-suit="${card.suit}">`;
   });
 }
 
-// Function to play a card
-function playCard(cardValue, cardSuit) {
-  const targetCard = prompt('Enter the value and suit of the card you want to grab (e.g., 4 clubs), or leave blank to play a new card.');
-  
-  if (targetCard) {
-    const [targetValue, targetSuit] = targetCard.split(' ');
+// Drag-and-Drop Functions
+function dragCard(event) {
+  const cardValue = event.target.getAttribute('data-value');
+  const cardSuit = event.target.getAttribute('data-suit');
+  event.dataTransfer.setData('card', JSON.stringify({ card: cardValue, suit: cardSuit }));
+}
+
+function allowDrop(event) {
+  event.preventDefault();
+}
+
+function dropCard(event, target) {
+  event.preventDefault();
+  const droppedCard = JSON.parse(event.dataTransfer.getData('card'));
+
+  // Check the target
+  if (target === 'table') {
+    const tableCard = event.target.closest('.card');
+    const tableCardValue = tableCard ? tableCard.getAttribute('data-value') : null;
+    const tableCardSuit = tableCard ? tableCard.getAttribute('data-suit') : null;
+
+    // Emit a play card event
     socket.emit('play card', {
-      playedCard: { card: cardValue, suit: cardSuit },
-      targetCard: { card: parseInt(targetValue), suit: targetSuit }
-    });
-  } else {
-    socket.emit('play card', {
-      playedCard: { card: cardValue, suit: cardSuit }
+      playedCard: droppedCard,
+      targetCard: tableCard ? { card: parseInt(tableCardValue), suit: tableCardSuit } : null
     });
   }
+}
+
+// Collect Cards
+socket.on('collect', function (cards) {
+  collectedCards.push(...cards);
+  updateCollectedCards();
+});
+
+function updateCollectedCards() {
+  const collectedDiv = document.getElementById('collectedCards');
+  collectedDiv.innerHTML = '';
+  collectedCards.forEach(card => {
+    collectedDiv.innerHTML += `<img class="card" src="./cards/${card.suit}/${card.card}.svg">`;
+  });
 }

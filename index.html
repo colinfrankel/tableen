@@ -24,13 +24,18 @@
     <div id="turnStatus" style="text-align: center; margin: 20px; font-size: 1.5em;"></div>
 
     <!-- Display table cards -->
-    <div id="tableCards" class="card-container">
+    <div id="tableCards" class="card-container" ondragover="allowDrop(event)" ondrop="dropCard(event, 'table')">
       <h2>Table Cards</h2>
     </div>
 
     <!-- Display player's hand -->
     <div id="cards" class="card-container">
       <h2>Your Hand</h2>
+    </div>
+
+    <!-- Display collected cards -->
+    <div id="collectedCards" class="card-container">
+      <h2>Collected Cards</h2>
     </div>
   </div>
 
