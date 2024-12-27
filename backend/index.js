@@ -137,27 +137,40 @@ io.on('connection', (socket) => {
       socket.emit('status', 'Not your turn!');
       return;
     }
-
-    const { playedCard, targetCard } = data; // `playedCard` is from the player's hand; `targetCard` is optional.
-
-    // Find the player's hand and opponent
+  
+    const { playedCard, targetCard, secondCard } = data; // `playedCard`, `targetCard`, and optional `secondCard`.
+  
+    // Determine player and opponent
     const playerKey = socket.id === playerOneId ? 'playerOne' : 'playerTwo';
     const opponentKey = socket.id === playerOneId ? 'playerTwo' : 'playerOne';
-
-    // Handle grab action
-    if (targetCard) {
+  
+    if (secondCard) {
+      // Handle stacking logic
+      const firstIndex = playerHands[playerKey].findIndex(card => card.card === playedCard.card && card.suit === playedCard.suit);
+      const secondIndex = playerHands[playerKey].findIndex(card => card.card === secondCard.card && card.suit === secondCard.suit);
+      const targetIndex = playerHands[playerKey].findIndex(card => card.card === playedCard.card + secondCard.card);
+  
+      if (firstIndex !== -1 && secondIndex !== -1 && targetIndex !== -1) {
+        // Valid stack
+        playerHands[playerKey].splice(firstIndex, 1);
+        playerHands[playerKey].splice(secondIndex, 1);
+        tableCards.push({ card: playedCard.card + secondCard.card, suit: 'stack' }); // Use a dummy suit for stacks
+        io.sockets.emit('update table', tableCards);
+      } else {
+        socket.emit('status', 'Invalid stack move!');
+        return;
+      }
+    } else if (targetCard) {
+      // Handle normal grab
       const targetIndex = tableCards.findIndex(card => card.card === targetCard.card && card.suit === targetCard.suit);
-      if (targetIndex !== -1) {
-        const playedIndex = playerHands[playerKey].findIndex(card => card.card === playedCard.card && card.suit === playedCard.suit);
-        if (playedIndex !== -1 && playedCard.card === targetCard.card) {
-          // Grab successful
-          playerHands[playerKey].push(...tableCards.splice(targetIndex, 1));
-          playerHands[playerKey].splice(playedIndex, 1); // Remove played card
-          io.sockets.emit('update table', tableCards);
-        } else {
-          socket.emit('status', 'Invalid move');
-          return;
-        }
+      const playedIndex = playerHands[playerKey].findIndex(card => card.card === playedCard.card && card.suit === playedCard.suit);
+      if (targetIndex !== -1 && playedIndex !== -1 && playedCard.card === targetCard.card) {
+        playerHands[playerKey].push(...tableCards.splice(targetIndex, 1));
+        playerHands[playerKey].splice(playedIndex, 1);
+        io.sockets.emit('update table', tableCards);
+      } else {
+        socket.emit('status', 'Invalid move!');
+        return;
       }
     } else {
       // Play a card
@@ -166,11 +179,11 @@ io.on('connection', (socket) => {
         tableCards.push(playerHands[playerKey].splice(playedIndex, 1)[0]);
         io.sockets.emit('update table', tableCards);
       } else {
-        socket.emit('status', 'Invalid move');
+        socket.emit('status', 'Invalid move!');
         return;
       }
     }
-
+  
     // Switch turns
     currentPlayer = socket.id === playerOneId ? playerTwoId : playerOneId;
     io.sockets.sockets.get(currentPlayer).emit('your turn', { hand: playerHands[opponentKey], table: tableCards });
