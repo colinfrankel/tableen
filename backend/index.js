@@ -53,7 +53,7 @@ var fullDeck = [
     {card:13, suit:'spades'},
   ]
   
-  var ful
+  var deck = []
   
   function shuffle(array) {
     let currentIndex = array.length,  randomIndex;
@@ -78,7 +78,7 @@ var fullDeck = [
   const server = require('http').createServer(app);
   const io = require('socket.io')(server, {
     cors: {
-      origin: "https://tabline.niloc3.repl.co",
+      origin: "https://niloc3.github.io/tabline/",
       methods: ["GET", "POST"]
     },
     closeOnBeforeunload: true
