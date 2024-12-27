@@ -1,3 +1,5 @@
+const io = require('socket.io')(3000);
+
 var fullDeck = [
   {card:1, suit:'clubs'},
   {card:2, suit:'clubs'},
