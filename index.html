@@ -1,47 +1,29 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width">
   <title>Tabline</title>
   <link href="style.css" rel="stylesheet" type="text/css" />
 </head>
 
 <body>
-  <h1 id="title">Waiting for another player...</h1>
+  <h1 id="title">Waiting for other player...</h1>
   <div class="container">
-    <!-- Display opponent's cards -->
-    <div id="opponentCards" style="display: none;">
-      <h2>Opponent's Cards</h2>
+    <div id="opponentCards">
       <img class="card" src="./cards/cardback.svg">
       <img class="card" src="./cards/cardback.svg">
       <img class="card" src="./cards/cardback.svg">
       <img class="card" src="./cards/cardback.svg">
     </div>
-
-    <!-- Display turn status -->
-    <div id="turnStatus" style="text-align: center; margin: 20px; font-size: 1.5em;"></div>
-
-    <!-- Display table cards -->
-    <div id="tableCards" class="card-container" ondragover="allowDrop(event)" ondrop="dropCard(event, 'table')">
-      <h2>Table Cards</h2>
-    </div>
-
-    <!-- Display player's hand -->
-    <div id="cards" class="card-container">
-      <h2>Your Hand</h2>
-    </div>
-
-    <!-- Display collected cards -->
-    <div id="collectedCards" class="card-container">
-      <h2>Collected Cards</h2>
-    </div>
+    <div id="tableCards" class="droppable"></div>
+    <div id="cards"></div>
   </div>
-
-  <!-- Include socket.io and the game script -->
+  <p id="turnStatus"></p>
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
   <script src="script.js" defer></script>
+
 </body>
 
 </html>

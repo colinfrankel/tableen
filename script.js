@@ -28,7 +28,12 @@ socket.on('status', function (status) {
 });
 
 socket.on('error', function (message) {
-  alert(`Invalid Move: ${message}`);
+  const turnStatus = document.getElementById('turnStatus');
+  turnStatus.innerText = `Invalid Move: ${message}`;
+  turnStatus.style.color = 'red';
+  setTimeout(() => {
+    turnStatus.innerText = '';
+  }, 3000);
 });
 
 // Function to update the game UI
