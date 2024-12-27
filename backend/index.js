@@ -54,23 +54,42 @@ var fullDeck = [
 ]
 
 var deck = [];
-var tableCards = [];
-var playerHands = {
+let tableCards = [];
+let playerHands = {
   playerOne: [],
   playerTwo: []
 };
-var currentPlayer = '';
+let collectedCards = {
+  playerOne: [],
+  playerTwo: []
+};
+let currentPlayer = '';
+let playerOneId = '';
+let playerTwoId = '';
+
+function initializeDeck() {
+  const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
+  const values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+  fullDeck = [];
+
+  for (let suit of suits) {
+    for (let value of values) {
+      fullDeck.push({ card: value, suit: suit });
+    }
+  }
+}
 
 function shuffle(array) {
-  let currentIndex = array.length, randomIndex;
-  while (currentIndex != 0) {
-    randomIndex = Math.floor(Math.random() * currentIndex);
-    currentIndex--;
-    [array[currentIndex], array[randomIndex]] = [
-      array[randomIndex], array[currentIndex]
-    ];
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
   }
-  return array;
+}
+
+function dealCards() {
+  playerHands.playerOne = deck.splice(0, 5);
+  playerHands.playerTwo = deck.splice(0, 5);
+  tableCards.push(deck.pop());
 }
 
 function resetGame() {
@@ -80,55 +99,34 @@ function resetGame() {
     playerOne: [],
     playerTwo: []
   };
+  collectedCards = {
+    playerOne: [],
+    playerTwo: []
+  };
   currentPlayer = '';
   shuffle(deck);
+  dealCards();
 }
 
-const app = require('express')();
-const server = require('http').createServer(app);
-const io = require('socket.io')(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  },
-  closeOnBeforeunload: true
-});
-
-var playerOneId = '';
-var playerTwoId = '';
-
 io.on('connection', (socket) => {
-  console.log('User connected');
-  
-  socket.on('disconnect', () => {
-    console.log('User disconnected');
-    if (socket.id === playerOneId || socket.id === playerTwoId) {
-      playerOneId = '';
-      playerTwoId = '';
-      resetGame();
-      io.sockets.sockets.forEach(function(s) {
-        s.disconnect(true);
-      });
-    }
-  });
-
-  socket.on('create user', () => {
+  socket.on('join game', () => {
     if (!playerOneId) {
       playerOneId = socket.id;
+      socket.emit('status', 'You are Player One. Waiting for Player Two...');
     } else if (!playerTwoId) {
       playerTwoId = socket.id;
-      resetGame();
-
-      // Deal cards
-      playerHands.playerOne = deck.slice(0, 4);
-      playerHands.playerTwo = deck.slice(4, 8);
-      tableCards = deck.slice(8, 12);
-      deck.splice(0, 12);
-
-      // Start the game
       currentPlayer = playerOneId;
-      io.sockets.sockets.get(playerOneId).emit('your turn', { hand: playerHands.playerOne, table: tableCards });
-      io.sockets.sockets.get(playerTwoId).emit('wait', { hand: playerHands.playerTwo, table: tableCards });
+      resetGame();
+      io.to(playerOneId).emit('your turn', {
+        hand: playerHands.playerOne,
+        table: tableCards
+      });
+      io.to(playerTwoId).emit('wait', {
+        hand: playerHands.playerTwo,
+        table: tableCards
+      });
+    } else {
+      socket.emit('status', 'Game is full.');
     }
   });
 
@@ -137,60 +135,65 @@ io.on('connection', (socket) => {
       socket.emit('status', 'Not your turn!');
       return;
     }
-  
-    const { playedCard, targetCard, secondCard } = data; // `playedCard`, `targetCard`, and optional `secondCard`.
-  
-    // Determine player and opponent
+
+    const { playedCard, targetCard } = data;
     const playerKey = socket.id === playerOneId ? 'playerOne' : 'playerTwo';
-    const opponentKey = socket.id === playerOneId ? 'playerTwo' : 'playerOne';
-  
-    if (secondCard) {
-      // Handle stacking logic
-      const firstIndex = playerHands[playerKey].findIndex(card => card.card === playedCard.card && card.suit === playedCard.suit);
-      const secondIndex = playerHands[playerKey].findIndex(card => card.card === secondCard.card && card.suit === secondCard.suit);
-      const targetIndex = playerHands[playerKey].findIndex(card => card.card === playedCard.card + secondCard.card);
-  
-      if (firstIndex !== -1 && secondIndex !== -1 && targetIndex !== -1) {
-        // Valid stack
-        playerHands[playerKey].splice(firstIndex, 1);
-        playerHands[playerKey].splice(secondIndex, 1);
-        tableCards.push({ card: playedCard.card + secondCard.card, suit: 'stack' }); // Use a dummy suit for stacks
-        io.sockets.emit('update table', tableCards);
-      } else {
-        socket.emit('status', 'Invalid stack move!');
+
+    // Validate played card exists in player's hand
+    const playedIndex = playerHands[playerKey].findIndex(
+      (card) => card.card === playedCard.card && card.suit === playedCard.suit
+    );
+    if (playedIndex === -1) {
+      socket.emit('status', 'Invalid move: card not in your hand.');
+      return;
+    }
+
+    if (targetCard) {
+      // Validate target card exists on the table
+      const targetIndex = tableCards.findIndex(
+        (card) => card.card === targetCard.card && card.suit === targetCard.suit
+      );
+      if (targetIndex === -1) {
+        socket.emit('status', 'Invalid move: target card not on the table.');
         return;
       }
-    } else if (targetCard) {
-      // Handle normal grab
-      const targetIndex = tableCards.findIndex(card => card.card === targetCard.card && card.suit === targetCard.suit);
-      const playedIndex = playerHands[playerKey].findIndex(card => card.card === playedCard.card && card.suit === playedCard.suit);
-      if (targetIndex !== -1 && playedIndex !== -1 && playedCard.card === targetCard.card) {
-        playerHands[playerKey].push(...tableCards.splice(targetIndex, 1));
-        playerHands[playerKey].splice(playedIndex, 1);
-        io.sockets.emit('update table', tableCards);
+
+      // Check if the played card matches or stacks with the target card
+      if (playedCard.card === targetCard.card) {
+        // Collect cards
+        collectedCards[playerKey].push(
+          ...tableCards.splice(targetIndex, 1),
+          playedCard
+        );
+        playerHands[playerKey].splice(playedIndex, 1); // Remove played card
       } else {
-        socket.emit('status', 'Invalid move!');
+        socket.emit('status', 'Invalid move: cards do not match or stack.');
         return;
       }
     } else {
-      // Play a card
-      const playedIndex = playerHands[playerKey].findIndex(card => card.card === playedCard.card && card.suit === playedCard.suit);
-      if (playedIndex !== -1) {
-        tableCards.push(playerHands[playerKey].splice(playedIndex, 1)[0]);
-        io.sockets.emit('update table', tableCards);
-      } else {
-        socket.emit('status', 'Invalid move!');
-        return;
-      }
+      // Play a new card if no target is specified
+      tableCards.push(playerHands[playerKey].splice(playedIndex, 1)[0]);
     }
-  
+
+    // Notify clients of the updated game state
+    io.sockets.emit('update table', tableCards);
+    socket.emit('wait', { hand: playerHands[playerKey], table: tableCards });
+    io.sockets.sockets
+      .get(currentPlayer)
+      .emit('your turn', { hand: playerHands[playerKey], table: tableCards });
+
     // Switch turns
     currentPlayer = socket.id === playerOneId ? playerTwoId : playerOneId;
-    io.sockets.sockets.get(currentPlayer).emit('your turn', { hand: playerHands[opponentKey], table: tableCards });
-    socket.emit('wait', { hand: playerHands[playerKey], table: tableCards });
+  });
+
+  socket.on('disconnect', () => {
+    if (socket.id === playerOneId || socket.id === playerTwoId) {
+      io.sockets.emit('status', 'A player disconnected. Game reset.');
+      resetGame();
+    }
   });
 });
 
-server.listen(3000, () => {
-  console.log('Server running on port 3000');
-});
+// Initialize the game
+initializeDeck();
+resetGame();
