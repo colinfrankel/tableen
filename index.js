@@ -74,79 +74,69 @@ var fullDeck = [
   }
   
   const app = require('express')();
-  const port = process.env.PORT
-
-  app.get('/', (req, res) => {
-    res.render('pages/index')
-  })
-
-  app.listen(port, () => {
-    console.log(`App listening on port ${port}`)
-  })
-
   
-//   const server = require('http').createServer(app);
-//   const io = require('socket.io')(server, {
-//     cors: {
-//       origin: "https://tabline.niloc3.repl.co",
-//       methods: ["GET", "POST"]
-//     },
-//     closeOnBeforeunload: true
-//   });
+  const server = require('http').createServer(app);
+  const io = require('socket.io')(server, {
+    cors: {
+      origin: "https://tabline.niloc3.repl.co",
+      methods: ["GET", "POST"]
+    },
+    closeOnBeforeunload: true
+  });
   
   
-//   var clientCount = 0
-//   var playerOneId = ''
-//   var playerTwoId = ''
+  var clientCount = 0
+  var playerOneId = ''
+  var playerTwoId = ''
   
-//   io.on('connection', (socket) => {
-//     console.log('user connected')
-//     clientCount++
+  io.on('connection', (socket) => {
+    console.log('user connected')
+    clientCount++
     
-//     socket.on('disconnect', () => {
-//       console.log('user disconnected');
-//       clientCount--
-//       if (socket.id == playerOneId || socket.id == playerTwoId) {
-//         playerOneId = ''
-//         playerTwoId = ''
-//         deck = fullDeck.slice(0);
-//         io.sockets.sockets.forEach(function(s) {
-//           s.disconnect(true);
-//         });
-//       }
+    socket.on('disconnect', () => {
+      console.log('user disconnected');
+      clientCount--
+      if (socket.id == playerOneId || socket.id == playerTwoId) {
+        playerOneId = ''
+        playerTwoId = ''
+        deck = fullDeck.slice(0);
+        io.sockets.sockets.forEach(function(s) {
+          s.disconnect(true);
+        });
+      }
   
       
-//     });
+    });
   
-//     socket.on('create user', (user) => {
-//       if (clientCount > 2) socket.emit('status', 'too many players')
-//       if (clientCount == 1) playerOneId = socket.id
-//       if (clientCount == 2) {
-//         playerTwoId = socket.id
-//         shuffle(deck);
-//         var playerOneCards = deck.slice(0, 4)
-//         var playerTwoCards = deck.slice(4, 8)
-//         var tableCards = deck.slice(8, 12)
+    socket.on('create user', (user) => {
+      if (clientCount > 2) socket.emit('status', 'too many players')
+      if (clientCount == 1) playerOneId = socket.id
+      if (clientCount == 2) {
+        playerTwoId = socket.id
+        shuffle(deck);
+        var playerOneCards = deck.slice(0, 4)
+        var playerTwoCards = deck.slice(4, 8)
+        var tableCards = deck.slice(8, 12)
   
-//         deck.splice(0, 12)
+        deck.splice(0, 12)
   
-//         const p1 = {
-//           table: tableCards,
-//           player: playerOneCards
-//         }
+        const p1 = {
+          table: tableCards,
+          player: playerOneCards
+        }
   
-//         const p2 = {
-//           table: tableCards,
-//           player: playerTwoCards
-//         }
+        const p2 = {
+          table: tableCards,
+          player: playerTwoCards
+        }
   
-//         io.sockets.sockets.get(playerOneId).emit('cards', p1)
-//         io.sockets.sockets.get(playerTwoId).emit('cards', p2)
+        io.sockets.sockets.get(playerOneId).emit('cards', p1)
+        io.sockets.sockets.get(playerTwoId).emit('cards', p2)
   
-//       }
+      }
       
-//     });
+    });
   
   
-//   });
-//   server.listen(5006);
+  });
+  server.listen(3000);
