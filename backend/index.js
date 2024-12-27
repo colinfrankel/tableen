@@ -137,12 +137,14 @@ function validateMove(playedCard, targetCard) {
 function updatePlayers() {
   Object.keys(players).forEach(id => {
     const player = players[id];
-    io.to(id).emit(currentPlayerTurn === id ? 'turn' : 'wait', {
+    io.to(id).emit('cards', {
       table: tableCards,
-      player: player.hand,
+      player: player.hand || [], // Ensure 'player' array is sent
     });
-    io.to(id).emit('collect', player.collected);
+    io.to(id).emit(currentPlayerTurn === id ? 'turn' : 'wait');
+    io.to(id).emit('collect', player.collected || []); // Ensure 'collected' array is sent
   });
 }
+
 
 server.listen(3000, () => console.log('Server is running on port 3000'));
