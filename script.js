@@ -1,4 +1,4 @@
-var socket = io('https://tabline-backend.niloc3.repl.co');
+var socket = io('https://tabline.onrender.com');
 
 socket.on('connect', function () {
   console.log("connected!")
