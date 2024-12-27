@@ -1,0 +1,32 @@
+html {
+  height: 100%;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+#tableCards {
+  height: 45vh;
+}
+
+.card {
+  width: 10vw;
+  margin: 10px;
+}
+
+#opponentCards {
+  display: none;
+  flex-direction: row;
+}
+
+#opponentCards .card {
+  width: 6vw;
+}
+
