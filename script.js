@@ -23,7 +23,7 @@ socket.on('update table', function (table) {
 });
 
 socket.on('status', function (status) {
-  document.body.innerHTML = `<h1>${status}</h1>`;
+  alert(status)
 });
 
 // Function to update the game UI

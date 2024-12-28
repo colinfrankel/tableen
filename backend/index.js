@@ -151,7 +151,6 @@ var fullDeck = [
           const playedIndex = playerHands[playerKey].findIndex(card => card.card === playedCard.card && card.suit === playedCard.suit);
           if (playedIndex !== -1 && playedCard.card === targetCard.card) {
             // Grab successful
-            playerHands[playerKey].push(...tableCards.splice(targetIndex, 1));
             playerHands[playerKey].splice(playedIndex, 1); // Remove played card
             io.sockets.emit('update table', tableCards);
           } else {
