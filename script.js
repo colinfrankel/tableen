@@ -5,11 +5,10 @@ socket.on('connect', function () {
   socket.emit('create user');
 });
 
-socket.on('disconnect', function (reason) {
+socket.on('disconnect', function () {
   document.body.innerHTML = 'Disconnected, reload to start a new game';
 });
 
-// Handles initial card distribution
 socket.on('your turn', function (data) {
   updateGameUI(data, true);
 });
@@ -23,52 +22,61 @@ socket.on('update table', function (table) {
 });
 
 socket.on('status', function (status) {
-  alert(status)
+  alert(status);
 });
 
-// Function to update the game UI
 function updateGameUI(data, isYourTurn) {
   document.getElementById('opponentCards').style.display = 'flex';
-  
-  // Reset card areas
-  document.getElementById('cards').innerHTML = '';
-  document.getElementById('tableCards').innerHTML = '';
-  
-  // Populate player's hand
+
+  // Update player's hand
+  const cardsDiv = document.getElementById('cards');
+  cardsDiv.innerHTML = '';
   data.hand.forEach(card => {
-    document.getElementById('cards').innerHTML += `
-      <img class="card" 
-           src="./cards/${card.suit}/${card.card}.svg" 
-           onclick="playCard(${card.card}, '${card.suit}')">`;
+    const cardImg = document.createElement('img');
+    cardImg.className = 'card';
+    cardImg.src = `./cards/${card.suit}/${card.card}.svg`;
+    cardImg.onclick = () => playCard(card.card, card.suit);
+    cardsDiv.appendChild(cardImg);
   });
 
-  // Populate table cards
+  // Update table cards
   updateTableCards(data.table);
 
   // Show turn status
+  const turnStatusDiv = document.getElementById('turnStatus');
   if (isYourTurn) {
-    document.getElementById('turnStatus').innerText = 'Your turn!';
-    document.getElementById('turnStatus').style.color = 'green';
+    turnStatusDiv.innerText = 'Your turn!';
+    turnStatusDiv.style.color = 'green';
   } else {
-    document.getElementById('turnStatus').innerText = 'Wait for your opponent...';
-    document.getElementById('turnStatus').style.color = 'red';
+    turnStatusDiv.innerText = 'Wait for your opponent...';
+    turnStatusDiv.style.color = 'red';
   }
 }
 
-// Function to update table cards
 function updateTableCards(tableCards) {
   const tableCardsDiv = document.getElementById('tableCards');
   tableCardsDiv.innerHTML = '';
-  tableCards.forEach(card => {
-    tableCardsDiv.innerHTML += `<img class="card" src="./cards/${card.suit}/${card.card}.svg">`;
+
+  tableCards.forEach((stack, index) => {
+    const stackDiv = document.createElement('div');
+    stackDiv.className = 'card-stack';
+    stackDiv.dataset.stackIndex = index;
+
+    stack.forEach(card => {
+      const cardImg = document.createElement('img');
+      cardImg.className = 'card';
+      cardImg.src = `./cards/${card.suit}/${card.card}.svg`;
+      stackDiv.appendChild(cardImg);
+    });
+
+    tableCardsDiv.appendChild(stackDiv);
   });
 }
 
-// Function to play a card
 function playCard(cardValue, cardSuit) {
-  const action = prompt('Enter "grab" to grab a card, "stack" to stack on a pile, or leave blank to play a new card.');
+  const action = prompt('Enter "grab" to grab a card, "stack" to stack, or leave blank to play.');
   if (action === 'grab') {
-    const targetCard = prompt('Enter the value and suit of the card you want to grab (e.g., 4 clubs).');
+    const targetCard = prompt('Enter the value and suit of the card to grab (e.g., 4 clubs).');
     if (targetCard) {
       const [targetValue, targetSuit] = targetCard.split(' ');
       socket.emit('play card', {
@@ -77,7 +85,7 @@ function playCard(cardValue, cardSuit) {
       });
     }
   } else if (action === 'stack') {
-    const stackSum = prompt('Enter the current sum of the stack you want to add to.');
+    const stackSum = prompt('Enter the current stack sum.');
     if (stackSum) {
       socket.emit('play card', {
         playedCard: { card: cardValue, suit: cardSuit },
@@ -85,9 +93,6 @@ function playCard(cardValue, cardSuit) {
       });
     }
   } else {
-    socket.emit('play card', {
-      playedCard: { card: cardValue, suit: cardSuit }
-    });
+    socket.emit('play card', { playedCard: { card: cardValue, suit: cardSuit } });
   }
 }
-
