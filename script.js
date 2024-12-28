@@ -68,15 +68,8 @@ function updateTableCards(tableCards) {
 // Function to play a card
 function playCard(cardValue, cardSuit) {
   const targetCard = prompt('Enter the value and suit of the card you want to grab (e.g., 4 clubs), or leave blank to play a new card.');
-  const secondCard = prompt('Enter the value and suit of a second card for stacking, or leave blank.');
-
-  if (secondCard) {
-    const [secondValue, secondSuit] = secondCard.split(' ');
-    socket.emit('play card', {
-      playedCard: { card: cardValue, suit: cardSuit },
-      secondCard: { card: parseInt(secondValue), suit: secondSuit }
-    });
-  } else if (targetCard) {
+  
+  if (targetCard) {
     const [targetValue, targetSuit] = targetCard.split(' ');
     socket.emit('play card', {
       playedCard: { card: cardValue, suit: cardSuit },
