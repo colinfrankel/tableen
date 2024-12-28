@@ -1,3 +1,5 @@
+const { table } = require('console');
+
 var fullDeck = [
     {card:1, suit:'clubs'},
     {card:2, suit:'clubs'},
@@ -158,7 +160,7 @@ var fullDeck = [
             // Add card to stack and update sum
             tableCards[stackIndex].cards.push(playerHands[playerKey].splice(playedIndex, 1)[0]);
             tableCards[stackIndex].sum += playedCard.card;
-    
+            print(tableCards)
             io.sockets.emit('update table', tableCards);
           } else {
             socket.emit('status', 'Invalid stack action');
