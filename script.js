@@ -1,12 +1,7 @@
-var socket = io('https://tabline.onrender.com');
+var socket = io();
 
 socket.on('connect', function () {
-  console.log("connected!");
   socket.emit('create user');
-});
-
-socket.on('disconnect', function () {
-  document.body.innerHTML = 'Disconnected, reload to start a new game';
 });
 
 socket.on('your turn', function (data) {
@@ -21,77 +16,40 @@ socket.on('update table', function (table) {
   updateTableCards(table);
 });
 
-socket.on('status', function (status) {
-  alert(status);
-});
-
 function updateGameUI(data, isYourTurn) {
-  document.getElementById('opponentCards').style.display = 'flex';
-
-  // Update player's hand
-  const cardsDiv = document.getElementById('cards');
-  cardsDiv.innerHTML = '';
-  data.hand.forEach(card => {
-    const cardImg = document.createElement('img');
-    cardImg.className = 'card';
-    cardImg.src = `./cards/${card.suit}/${card.card}.svg`;
-    cardImg.onclick = () => playCard(card.card, card.suit);
-    cardsDiv.appendChild(cardImg);
-  });
-
-  // Update table cards
   updateTableCards(data.table);
-
-  // Show turn status
-  const turnStatusDiv = document.getElementById('turnStatus');
-  if (isYourTurn) {
-    turnStatusDiv.innerText = 'Your turn!';
-    turnStatusDiv.style.color = 'green';
-  } else {
-    turnStatusDiv.innerText = 'Wait for your opponent...';
-    turnStatusDiv.style.color = 'red';
-  }
+  updatePlayerCards(data.hand);
+  document.getElementById('turnStatus').textContent = isYourTurn ? "Your turn!" : "Wait for your opponent...";
 }
 
-function updateTableCards(tableCards) {
-  const tableCardsDiv = document.getElementById('tableCards');
-  tableCardsDiv.innerHTML = '';
+function updateTableCards(cards) {
+  const tableDiv = document.getElementById('tableCards');
+  tableDiv.innerHTML = '';
+  cards.forEach(card => {
+    const img = document.createElement('img');
+    img.className = 'card';
+    img.src = `./cards/${card.suit}/${card.card}.svg`;
+    tableDiv.appendChild(img);
+  });
+}
 
-  tableCards.forEach((stack, index) => {
-    const stackDiv = document.createElement('div');
-    stackDiv.className = 'card-stack';
-    stackDiv.dataset.stackIndex = index;
-
-    stack.forEach(card => {
-      const cardImg = document.createElement('img');
-      cardImg.className = 'card';
-      cardImg.src = `./cards/${card.suit}/${card.card}.svg`;
-      stackDiv.appendChild(cardImg);
-    });
-
-    tableCardsDiv.appendChild(stackDiv);
+function updatePlayerCards(hand) {
+  const handDiv = document.getElementById('cards');
+  handDiv.innerHTML = '';
+  hand.forEach(card => {
+    const img = document.createElement('img');
+    img.className = 'card';
+    img.src = `./cards/${card.suit}/${card.card}.svg`;
+    img.onclick = () => playCard(card.card, card.suit);
+    handDiv.appendChild(img);
   });
 }
 
 function playCard(cardValue, cardSuit) {
-  const action = prompt('Enter "grab" to grab a card, "stack" to stack, or leave blank to play.');
+  const action = prompt('Play or grab (leave blank for play)?');
   if (action === 'grab') {
-    const targetCard = prompt('Enter the value and suit of the card to grab (e.g., 4 clubs).');
-    if (targetCard) {
-      const [targetValue, targetSuit] = targetCard.split(' ');
-      socket.emit('play card', {
-        playedCard: { card: cardValue, suit: cardSuit },
-        targetCard: { card: parseInt(targetValue), suit: targetSuit }
-      });
-    }
-  } else if (action === 'stack') {
-    const stackSum = prompt('Enter the current stack sum.');
-    if (stackSum) {
-      socket.emit('play card', {
-        playedCard: { card: cardValue, suit: cardSuit },
-        stackTarget: { sum: parseInt(stackSum) }
-      });
-    }
+    const targetCard = prompt('Card to grab (value suit)?').split(' ');
+    socket.emit('play card', { playedCard: { card: cardValue, suit: cardSuit }, targetCard: { card: parseInt(targetCard[0]), suit: targetCard[1] } });
   } else {
     socket.emit('play card', { playedCard: { card: cardValue, suit: cardSuit } });
   }

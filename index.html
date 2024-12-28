@@ -11,27 +11,22 @@
 <body>
   <h1 id="title">Waiting for another player...</h1>
   <div class="container">
-    <!-- Display opponent's cards -->
-    <div id="opponentCards">
+    <div id="opponentCards" style="display: none;">
       <h2>Opponent's Cards</h2>
-      <!-- Cards will be dynamically added here -->
+      <div class="card-container"></div>
     </div>
 
-    <!-- Display turn status -->
     <div id="turnStatus"></div>
 
-    <!-- Display table cards -->
     <div id="tableCards" class="card-container">
       <h2>Table Cards</h2>
     </div>
 
-    <!-- Display player's hand -->
     <div id="cards" class="card-container">
       <h2>Your Hand</h2>
     </div>
   </div>
 
-  <!-- Include socket.io and the game script -->
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
   <script src="script.js" defer></script>
 </body>

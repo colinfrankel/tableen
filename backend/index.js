@@ -1,5 +1,3 @@
-const { table } = require('console');
-
 var fullDeck = [
     {card:1, suit:'clubs'},
     {card:2, suit:'clubs'},
@@ -54,156 +52,144 @@ var fullDeck = [
     {card:12, suit:'spades'},
     {card:13, suit:'spades'},
   ]
-  
   var deck = [];
-  var tableCards = [];
-  var playerHands = {
+var tableCards = [];
+var playerHands = {
+  playerOne: [],
+  playerTwo: []
+};
+var currentPlayer = '';
+
+function shuffle(array) {
+  let currentIndex = array.length, randomIndex;
+  while (currentIndex != 0) {
+    randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex--;
+    [array[currentIndex], array[randomIndex]] = [
+      array[randomIndex], array[currentIndex]
+    ];
+  }
+  return array;
+}
+
+function resetGame() {
+  deck = fullDeck.slice(0);
+  tableCards = [];
+  playerHands = {
     playerOne: [],
     playerTwo: []
   };
-  var currentPlayer = '';
+  currentPlayer = '';
+  shuffle(deck);
+}
+
+const app = require('express')();
+const server = require('http').createServer(app);
+const io = require('socket.io')(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
+var playerOneId = '';
+var playerTwoId = '';
+
+io.on('connection', (socket) => {
+  console.log('User connected');
   
-  function shuffle(array) {
-    let currentIndex = array.length, randomIndex;
-    while (currentIndex != 0) {
-      randomIndex = Math.floor(Math.random() * currentIndex);
-      currentIndex--;
-      [array[currentIndex], array[randomIndex]] = [
-        array[randomIndex], array[currentIndex]
-      ];
+  socket.on('disconnect', () => {
+    console.log('User disconnected');
+    if (socket.id === playerOneId || socket.id === playerTwoId) {
+      playerOneId = '';
+      playerTwoId = '';
+      resetGame();
+      io.sockets.sockets.forEach(function(s) {
+        s.disconnect(true);
+      });
     }
-    return array;
-  }
-  
-  function resetGame() {
-    deck = fullDeck.slice(0);
-    tableCards = [];
-    playerHands = {
-      playerOne: [],
-      playerTwo: []
-    };
-    currentPlayer = '';
-    shuffle(deck);
-  }
-  
-  const app = require('express')();
-  const server = require('http').createServer(app);
-  const io = require('socket.io')(server, {
-    cors: {
-      origin: "*",
-      methods: ["GET", "POST"]
-    },
-    closeOnBeforeunload: true
   });
-  
-  var playerOneId = '';
-  var playerTwoId = '';
-  
-  io.on('connection', (socket) => {
-    console.log('User connected');
-    
-    socket.on('disconnect', () => {
-      console.log('User disconnected');
-      if (socket.id === playerOneId || socket.id === playerTwoId) {
-        playerOneId = '';
-        playerTwoId = '';
-        resetGame();
-        io.sockets.sockets.forEach(function(s) {
-          s.disconnect(true);
-        });
-      }
-    });
-  
-    socket.on('create user', () => {
-      if (!playerOneId) {
-        playerOneId = socket.id;
-      } else if (!playerTwoId) {
-        playerTwoId = socket.id;
-        resetGame();
-  
-        // Deal cards
-        playerHands.playerOne = deck.slice(0, 4);
-        playerHands.playerTwo = deck.slice(4, 8);
-        tableCards = deck.slice(8, 12);
-        deck.splice(0, 12);
-  
-        // Start the game
-        currentPlayer = playerOneId;
-        io.sockets.sockets.get(playerOneId).emit('your turn', { hand: playerHands.playerOne, table: tableCards });
-        io.sockets.sockets.get(playerTwoId).emit('wait', { hand: playerHands.playerTwo, table: tableCards });
-      }
-    });
-  
-    socket.on('play card', (data) => {
-      if (socket.id !== currentPlayer) {
-        socket.emit('status', 'Not your turn!');
-        return;
-      }
-    
-      const { playedCard, targetCard } = data;
-    
-      // Identify current player
-      const playerKey = socket.id === playerOneId ? 'playerOne' : 'playerTwo';
-      const opponentKey = socket.id === playerOneId ? 'playerTwo' : 'playerOne';
-    
-      // Check if playedCard exists in the player's hand
-      const playedIndex = playerHands[playerKey].findIndex(card =>
-        card.card === playedCard.card && card.suit === playedCard.suit
+
+  socket.on('create user', () => {
+    if (!playerOneId) {
+      playerOneId = socket.id;
+    } else if (!playerTwoId) {
+      playerTwoId = socket.id;
+      resetGame();
+
+      // Deal cards
+      playerHands.playerOne = deck.slice(0, 4);
+      playerHands.playerTwo = deck.slice(4, 8);
+      tableCards = deck.slice(8, 12);
+      deck.splice(0, 12);
+
+      // Start the game
+      currentPlayer = playerOneId;
+      io.sockets.sockets.get(playerOneId).emit('your turn', { hand: playerHands.playerOne, table: tableCards });
+      io.sockets.sockets.get(playerTwoId).emit('wait', { hand: playerHands.playerTwo, table: tableCards });
+    }
+  });
+
+  socket.on('play card', (data) => {
+    if (socket.id !== currentPlayer) {
+      socket.emit('status', 'Not your turn!');
+      return;
+    }
+
+    const { playedCard, targetCard } = data;
+
+    const playerKey = socket.id === playerOneId ? 'playerOne' : 'playerTwo';
+
+    const playedIndex = playerHands[playerKey].findIndex(card =>
+      card.card === playedCard.card && card.suit === playedCard.suit
+    );
+
+    if (playedIndex === -1) {
+      socket.emit('status', 'Invalid move: You don\'t have that card.');
+      return;
+    }
+
+    if (targetCard) {
+      const targetIndex = tableCards.findIndex(card =>
+        card.card === targetCard.card && card.suit === targetCard.suit
       );
-    
-      if (playedIndex === -1) {
-        socket.emit('status', 'Invalid move: You don\'t have that card.');
-        return;
-      }
-    
-      if (targetCard) {
-        // Grab or stack logic
-        const targetIndex = tableCards.findIndex(card =>
-          card.card === targetCard.card && card.suit === targetCard.suit
-        );
-    
-        if (targetIndex !== -1) {
-          if (playedCard.card === targetCard.card) {
-            // Grab
-            tableCards.splice(targetIndex, 1);
-            playerHands[playerKey].splice(playedIndex, 1);
-            playerHands[playerKey].push(targetCard); // Add grabbed card to player hand
-            io.sockets.emit('update table', tableCards);
-          } else {
-            socket.emit('status', 'Invalid move: Cards do not match for grabbing.');
-            return;
-          }
+
+      if (targetIndex !== -1) {
+        if (playedCard.card === targetCard.card) {
+          tableCards.splice(targetIndex, 1);
+          playerHands[playerKey].splice(playedIndex, 1);
+          io.sockets.emit('update table', tableCards);
         } else {
-          socket.emit('status', 'Invalid move: Target card not on table.');
+          socket.emit('status', 'Invalid move: Cards do not match for grabbing.');
           return;
         }
       } else {
-        // Play a card to the table
-        const cardToPlay = playerHands[playerKey].splice(playedIndex, 1)[0];
-        if (cardToPlay) {
-          tableCards.push(cardToPlay);
-          io.sockets.emit('update table', tableCards);
-        } else {
-          socket.emit('status', 'Invalid move: Could not play card.');
-          return;
-        }
+        socket.emit('status', 'Invalid move: Target card not on table.');
+        return;
       }
-    
-      // Switch turns
-      currentPlayer = socket.id === playerOneId ? playerTwoId : playerOneId;
-      io.sockets.sockets.get(currentPlayer).emit('your turn', {
-        hand: playerHands[opponentKey],
-        table: tableCards,
-      });
-      socket.emit('wait', {
-        hand: playerHands[playerKey],
-        table: tableCards,
-      });
+    } else {
+      const cardToPlay = playerHands[playerKey].splice(playedIndex, 1)[0];
+      if (cardToPlay) {
+        tableCards.push(cardToPlay);
+        io.sockets.emit('update table', tableCards);
+      } else {
+        socket.emit('status', 'Invalid move: Could not play card.');
+        return;
+      }
+    }
+
+    currentPlayer = socket.id === playerOneId ? playerTwoId : playerOneId;
+    io.sockets.sockets.get(currentPlayer).emit('your turn', {
+      hand: playerHands[socket.id === playerOneId ? 'playerTwo' : 'playerOne'],
+      table: tableCards,
     });
-    
-    
+    socket.emit('wait', {
+      hand: playerHands[playerKey],
+      table: tableCards,
+    });
   });
-  
-  server.listen(3000, () => {
-    console.log('Server running on port 3000');
-  });
+});
+
+server.listen(3000, () => {
+  console.log('Server running on port 3000');
+});
