@@ -67,17 +67,28 @@ function updateTableCards(tableCards) {
 
 // Function to play a card
 function playCard(cardValue, cardSuit) {
-  const targetCard = prompt('Enter the value and suit of the card you want to grab (e.g., 4 clubs), or leave blank to play a new card.');
-  
-  if (targetCard) {
-    const [targetValue, targetSuit] = targetCard.split(' ');
-    socket.emit('play card', {
-      playedCard: { card: cardValue, suit: cardSuit },
-      targetCard: { card: parseInt(targetValue), suit: targetSuit }
-    });
+  const action = prompt('Enter "grab" to grab a card, "stack" to stack on a pile, or leave blank to play a new card.');
+  if (action === 'grab') {
+    const targetCard = prompt('Enter the value and suit of the card you want to grab (e.g., 4 clubs).');
+    if (targetCard) {
+      const [targetValue, targetSuit] = targetCard.split(' ');
+      socket.emit('play card', {
+        playedCard: { card: cardValue, suit: cardSuit },
+        targetCard: { card: parseInt(targetValue), suit: targetSuit }
+      });
+    }
+  } else if (action === 'stack') {
+    const stackSum = prompt('Enter the current sum of the stack you want to add to.');
+    if (stackSum) {
+      socket.emit('play card', {
+        playedCard: { card: cardValue, suit: cardSuit },
+        stackTarget: { sum: parseInt(stackSum) }
+      });
+    }
   } else {
     socket.emit('play card', {
       playedCard: { card: cardValue, suit: cardSuit }
     });
   }
 }
+
