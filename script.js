@@ -28,7 +28,6 @@ socket.on('status', function (status) {
 
 // Function to update the game UI
 function updateGameUI(data, isYourTurn) {
-  document.getElementById('title').style.display = 'none';
   document.getElementById('opponentCards').style.display = 'flex';
   
   // Reset card areas

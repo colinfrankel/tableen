@@ -140,73 +140,67 @@ var fullDeck = [
         return;
       }
     
-      const { playedCard, targetCard, stackTarget } = data; 
+      const { playedCard, targetCard } = data;
+    
+      // Identify current player
       const playerKey = socket.id === playerOneId ? 'playerOne' : 'playerTwo';
       const opponentKey = socket.id === playerOneId ? 'playerTwo' : 'playerOne';
     
-      // Handle stacking action
-      if (stackTarget) {
-        // Find the stack target
-        const stackIndex = tableCards.findIndex(
-          pile => pile.sum && pile.sum === stackTarget.sum
-        );
+      // Check if playedCard exists in the player's hand
+      const playedIndex = playerHands[playerKey].findIndex(card =>
+        card.card === playedCard.card && card.suit === playedCard.suit
+      );
     
-        if (stackIndex !== -1) {
-          const playedIndex = playerHands[playerKey].findIndex(
-            card => card.card === playedCard.card && card.suit === playedCard.suit
-          );
+      if (playedIndex === -1) {
+        socket.emit('status', 'Invalid move: You don\'t have that card.');
+        return;
+      }
     
-          if (playedIndex !== -1 && tableCards[stackIndex].sum + playedCard.card <= 13) {
-            // Add card to stack and update sum
-            tableCards[stackIndex].cards.push(playerHands[playerKey].splice(playedIndex, 1)[0]);
-            tableCards[stackIndex].sum += playedCard.card;
-            print(tableCards)
-            io.sockets.emit('update table', tableCards);
-          } else {
-            socket.emit('status', 'Invalid stack action');
-            return;
-          }
-        } else {
-          socket.emit('status', 'Invalid stack target');
-          return;
-        }
-      } else if (targetCard) {
-        // Handle grab action (existing logic)
+      if (targetCard) {
+        // Grab or stack logic
         const targetIndex = tableCards.findIndex(card =>
           card.card === targetCard.card && card.suit === targetCard.suit
         );
+    
         if (targetIndex !== -1) {
-          const playedIndex = playerHands[playerKey].findIndex(card =>
-            card.card === playedCard.card && card.suit === playedCard.suit
-          );
-          if (playedIndex !== -1 && playedCard.card === targetCard.card) {
-            tableCards.splice(targetIndex, 1); // Remove target card from table
-            playerHands[playerKey].splice(playedIndex, 1); // Remove played card from player hand
+          if (playedCard.card === targetCard.card) {
+            // Grab
+            tableCards.splice(targetIndex, 1);
+            playerHands[playerKey].splice(playedIndex, 1);
+            playerHands[playerKey].push(targetCard); // Add grabbed card to player hand
             io.sockets.emit('update table', tableCards);
           } else {
-            socket.emit('status', 'Invalid move');
+            socket.emit('status', 'Invalid move: Cards do not match for grabbing.');
             return;
           }
+        } else {
+          socket.emit('status', 'Invalid move: Target card not on table.');
+          return;
         }
       } else {
-        // Play a card (existing logic)
-        const playedIndex = playerHands[playerKey].findIndex(
-          card => card.card === playedCard.card && card.suit === playedCard.suit
-        );
-        if (playedIndex !== -1) {
-          tableCards.push({ cards: [playerHands[playerKey].splice(playedIndex, 1)[0]], sum: playedCard.card });
+        // Play a card to the table
+        const cardToPlay = playerHands[playerKey].splice(playedIndex, 1)[0];
+        if (cardToPlay) {
+          tableCards.push(cardToPlay);
           io.sockets.emit('update table', tableCards);
         } else {
-          socket.emit('status', 'Invalid move');
+          socket.emit('status', 'Invalid move: Could not play card.');
           return;
         }
       }
     
       // Switch turns
       currentPlayer = socket.id === playerOneId ? playerTwoId : playerOneId;
-      io.sockets.sockets.get(currentPlayer).emit('your turn', { hand: playerHands[opponentKey], table: tableCards });
-      socket.emit('wait', { hand: playerHands[playerKey], table: tableCards });
+      io.sockets.sockets.get(currentPlayer).emit('your turn', {
+        hand: playerHands[opponentKey],
+        table: tableCards,
+      });
+      socket.emit('wait', {
+        hand: playerHands[playerKey],
+        table: tableCards,
+      });
     });
+    
     
   });
   
