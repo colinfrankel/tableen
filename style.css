@@ -12,9 +12,14 @@ html, body {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
+  padding: 1em;
 }
 
 .card {
   width: 80px;
   margin: 5px;
+}
+
+#opponentCards {
+  display: none;
 }

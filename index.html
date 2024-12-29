@@ -11,20 +11,18 @@
 <body>
   <h1 id="title">Waiting for another player...</h1>
   <div class="container">
-    <div id="opponentCards" style="display: none;">
-      <h2>Opponent's Cards</h2>
-      <div class="card-container"></div>
-    </div>
-
     <div id="turnStatus"></div>
 
-    <div id="tableCards" class="card-container">
-      <h2>Table Cards</h2>
+    <div id="opponentCards" class="card-container">
+      <img src="cards/cardback.svg" class="card">
+      <img src="cards/cardback.svg" class="card">
+      <img src="cards/cardback.svg" class="card">
+      <img src="cards/cardback.svg" class="card">
     </div>
 
-    <div id="cards" class="card-container">
-      <h2>Your Hand</h2>
-    </div>
+    <div id="tableCards" class="card-container"></div>
+
+    <div id="cards" class="card-container"></div>
   </div>
 
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>

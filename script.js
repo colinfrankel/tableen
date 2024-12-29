@@ -1,20 +1,16 @@
-var socket = io('https://tabline.onrender.com');
-
-// Drag-and-drop variables
 let draggedCard = null;
-let draggedFromHand = false;
+let socket = io("http://localhost:3000");
 
-// Handle connection and disconnection
 socket.on('connect', function () {
-  console.log("connected!");
+  console.log("Connected to server!");
   socket.emit('create user');
 });
 
-socket.on('disconnect', function (reason) {
+socket.on('disconnect', function () {
   document.body.innerHTML = 'Disconnected, reload to start a new game';
 });
 
-// Handles initial card distribution
+// Update game UI with the current player's cards and table
 socket.on('your turn', function (data) {
   updateGameUI(data, true);
 });
@@ -31,36 +27,57 @@ socket.on('status', function (status) {
   alert(status);
 });
 
+document.body.addEventListener('dragover', (e) => {
+  e.preventDefault();
+});
+
+document.body.addEventListener('drop', function (e) {
+  e.preventDefault();
+  e.stopPropagation()
+  if (draggedCard && e.explicitOriginalTarget.getAttribute("class") != "card") {
+    playCard(draggedCard.card, draggedCard.suit, undefined, undefined, "normal");
+  }
+})
+
 // Function to update the game UI
 function updateGameUI(data, isYourTurn) {
-  document.getElementById('opponentCards').style.display = 'flex';
-
-  // Reset card areas
+  document.getElementById('title').innerHTML = '';
   document.getElementById('cards').innerHTML = '';
-  document.getElementById('tableCards').innerHTML = '';
+  document.getElementById('opponentCards').style.display = 'flex';
+  document.getElementById('opponentCards').innerHTML = ''
+  for (i = 1; i < data.opponentCards + 1; i++) {
+    const opponentCardElement = document.createElement('img');
+    opponentCardElement.src = `./cards/cardback.svg`;
+    opponentCardElement.classList.add('card');
+    document.getElementById('opponentCards').appendChild(opponentCardElement);
+  }
 
-  // Populate player's hand
+  // Populate player's hand with draggable cards
   data.hand.forEach(card => {
     const cardElement = document.createElement('img');
-    cardElement.classList.add('card');
     cardElement.src = `./cards/${card.suit}/${card.card}.svg`;
-    cardElement.setAttribute('draggable', 'true');
-    cardElement.setAttribute('data-card', JSON.stringify(card));
-    cardElement.addEventListener('dragstart', handleDragStart);
+    cardElement.classList.add('card');
+    cardElement.setAttribute('draggable', true);
+    cardElement.dataset.card = card.card;
+    cardElement.dataset.suit = card.suit;
+
+    cardElement.addEventListener('dragstart', function (e) {
+      draggedCard = { card: card.card, suit: card.suit };
+    });
+
     document.getElementById('cards').appendChild(cardElement);
   });
 
-  // Populate table cards
   updateTableCards(data.table);
 
   // Show turn status
-  const turnStatusElement = document.getElementById('turnStatus');
+  const turnStatus = document.getElementById('turnStatus');
   if (isYourTurn) {
-    turnStatusElement.innerText = 'Your turn!';
-    turnStatusElement.style.color = 'green';
+    turnStatus.innerText = 'Your turn!';
+    turnStatus.style.color = 'green';
   } else {
-    turnStatusElement.innerText = 'Wait for your opponent...';
-    turnStatusElement.style.color = 'red';
+    turnStatus.innerText = 'Wait for your opponent...';
+    turnStatus.style.color = 'red';
   }
 }
 
@@ -70,120 +87,34 @@ function updateTableCards(tableCards) {
   tableCardsDiv.innerHTML = '';
   tableCards.forEach(card => {
     const cardElement = document.createElement('img');
-    cardElement.classList.add('card');
     cardElement.src = `./cards/${card.suit}/${card.card}.svg`;
-    cardElement.setAttribute('data-card', JSON.stringify(card));
-    cardElement.addEventListener('dragover', handleDragOver);
-    cardElement.addEventListener('drop', handleDrop);
+    cardElement.classList.add('card');
+    let cardTarget;
+    cardElement.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      cardTarget = {
+        card: parseInt(e.explicitOriginalTarget.getAttribute("src").split("/")[3].split(".")[0]),
+        suit: e.explicitOriginalTarget.getAttribute("src").split("/")[2]
+      }
+    });
+    cardElement.addEventListener('drop', function (e) {
+      e.preventDefault();
+      if (draggedCard) {
+        playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack");
+        draggedCard = null;
+      } else {
+        playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "normal");
+      }
+    });
     tableCardsDiv.appendChild(cardElement);
   });
 }
 
-// Handle drag start event
-function handleDragStart(event) {
-  draggedCard = JSON.parse(event.target.getAttribute('data-card'));
-  draggedFromHand = true;
-}
-
-// Handle drag over event
-function handleDragOver(event) {
-  event.preventDefault(); // Allow drop
-}
-
-// Handle drop event (either grab or stack)
-function handleDrop(event) {
-  event.preventDefault();
-
-  const droppedCard = JSON.parse(event.target.getAttribute('data-card'));
-  let actionType = '';
-
-  // If dragged card is from hand and matches a card on table, it's a grab
-  if (draggedFromHand && draggedCard.card === droppedCard.card && draggedCard.suit === droppedCard.suit) {
-    actionType = 'grab';
-  } else {
-    // Otherwise, it's a stack action
-    actionType = 'stack';
-  }
-
-  // Send the action to the backend
+// Function to handle card play
+function playCard(cardValue, cardSuit, targetValue, targetSuit, actionType) {
   socket.emit('play card', {
-    playedCard: draggedCard,
-    targetCard: droppedCard,
-    stackTarget: { sum: stackSum }
+    playedCard: { card: cardValue, suit: cardSuit },
+    targetCard: {card: targetValue, suit: targetSuit},
+    actionType: actionType
   });
-
-  // Reset dragged state
-  draggedCard = null;
-  draggedFromHand = false;
-  function handleDrop(event) {
-    event.preventDefault();
-  
-    const droppedCard = JSON.parse(event.target.getAttribute('data-card'));
-    let actionType = '';
-    let stackSum = 0;  // Initialize stackSum
-  
-    // If dragged card is from hand and matches a card on table, it's a grab
-    if (draggedFromHand && draggedCard.card === droppedCard.card && draggedCard.suit === droppedCard.suit) {
-      actionType = 'grab';
-    } else {
-      // Ensure tableCards is an array
-      if (Array.isArray(tableCards)) {
-        stackSum = tableCards.reduce((sum, card) => sum + card.card, 0);  // Calculate the sum of the stack
-      }
-      actionType = 'stack';
-    }
-  
-    // Send the action to the backend
-    socket.emit('play card', {
-      playedCard: draggedCard,
-      targetCard: droppedCard,
-      stackTarget: { sum: stackSum },  // Include stackSum in the data
-      actionType: actionType  // Optionally send the action type (grab or stack)
-    });
-  
-    // Reset dragged state
-    draggedCard = null;
-    draggedFromHand = false;
-  }
-}  
-
-// Function to play a card (used in drag-and-drop case)
-function playCard(cardValue, cardSuit, actionType) {
-  const playedCard = { card: cardValue, suit: cardSuit };
-
-  // Check the action type (grab or stack)
-  const action = actionType || prompt('Enter "grab" to grab a card, "stack" to stack on a pile, or leave blank to play a new card.');
-
-  if (action === 'grab') {
-    // Assuming dragging the card to a target card will trigger a grab
-    const targetCard = getDraggedCard(); // This function should return the dragged target card object
-
-    if (targetCard) {
-      // Emit the play card event with targetCard for grabbing
-      socket.emit('play card', {
-        playedCard: playedCard,
-        targetCard: targetCard,
-        actionType: 'grab' // Action is grab
-      });
-    }
-  } else if (action === 'stack') {
-    // Assuming dragging the card to a stack will trigger a stack
-    const stackSum = getStackSum(); // This function should calculate the sum of the current stack on the table
-
-    if (stackSum) {
-      // Emit the play card event with stackTarget for stacking
-      socket.emit('play card', {
-        playedCard: playedCard,
-        stackTarget: { sum: stackSum }, // Stack target sum
-        actionType: 'stack' // Action is stack
-      });
-    }
-  } else {
-    // Default play: just play the card to the table
-    socket.emit('play card', {
-      playedCard: playedCard,
-      actionType: 'play' // Standard play (no grab or stack)
-    });
-  }
 }
-
