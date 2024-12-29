@@ -102,7 +102,6 @@ function handleDrop(event) {
     actionType = 'grab';
   } else {
     // Otherwise, it's a stack action
-    const stackSum = tableCards.reduce((sum, card) => sum + card.card, 0);
     actionType = 'stack';
   }
 
