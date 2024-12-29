@@ -1,5 +1,10 @@
 var socket = io('https://tabline.onrender.com');
 
+// Drag-and-drop variables
+let draggedCard = null;
+let draggedFromHand = false;
+
+// Handle connection and disconnection
 socket.on('connect', function () {
   console.log("connected!");
   socket.emit('create user');
@@ -29,20 +34,19 @@ socket.on('status', function (status) {
 // Function to update the game UI
 function updateGameUI(data, isYourTurn) {
   document.getElementById('opponentCards').style.display = 'flex';
-  
+
   // Reset card areas
   document.getElementById('cards').innerHTML = '';
   document.getElementById('tableCards').innerHTML = '';
-  
-  // Populate player's hand with draggable cards
+
+  // Populate player's hand
   data.hand.forEach(card => {
     const cardElement = document.createElement('img');
     cardElement.classList.add('card');
     cardElement.src = `./cards/${card.suit}/${card.card}.svg`;
-    cardElement.draggable = true;
-
-    // Set up drag events for each card
-    cardElement.addEventListener('dragstart', (e) => handleDragStart(e, card));
+    cardElement.setAttribute('draggable', 'true');
+    cardElement.setAttribute('data-card', JSON.stringify(card));
+    cardElement.addEventListener('dragstart', handleDragStart);
     document.getElementById('cards').appendChild(cardElement);
   });
 
@@ -50,74 +54,71 @@ function updateGameUI(data, isYourTurn) {
   updateTableCards(data.table);
 
   // Show turn status
+  const turnStatusElement = document.getElementById('turnStatus');
   if (isYourTurn) {
-    document.getElementById('turnStatus').innerText = 'Your turn!';
-    document.getElementById('turnStatus').style.color = 'green';
+    turnStatusElement.innerText = 'Your turn!';
+    turnStatusElement.style.color = 'green';
   } else {
-    document.getElementById('turnStatus').innerText = 'Wait for your opponent...';
-    document.getElementById('turnStatus').style.color = 'red';
+    turnStatusElement.innerText = 'Wait for your opponent...';
+    turnStatusElement.style.color = 'red';
   }
 }
 
-// Function to update table cards (stacking visually)
+// Function to update table cards
 function updateTableCards(tableCards) {
   const tableCardsDiv = document.getElementById('tableCards');
   tableCardsDiv.innerHTML = '';
-
-  tableCards.forEach((card, index) => {
+  tableCards.forEach(card => {
     const cardElement = document.createElement('img');
     cardElement.classList.add('card');
     cardElement.src = `./cards/${card.suit}/${card.card}.svg`;
-    
-    // Stacking logic (making stacked cards overlap)
-    cardElement.style.position = 'absolute';
-    cardElement.style.left = `${index * 10}px`;  // Small offset for stacking effect
-    cardElement.style.top = `${index * 10}px`;
+    cardElement.setAttribute('data-card', JSON.stringify(card));
+    cardElement.addEventListener('dragover', handleDragOver);
+    cardElement.addEventListener('drop', handleDrop);
     tableCardsDiv.appendChild(cardElement);
-
-    // Allow dropping cards onto table
-    cardElement.addEventListener('dragover', (e) => handleDragOver(e));
-    cardElement.addEventListener('drop', (e) => handleDrop(e, card));
   });
 }
 
-// Drag-and-Drop handlers
-let draggedCard = null;  // To store the dragged card details
-
-function handleDragStart(e, card) {
-  draggedCard = card;
-  e.dataTransfer.setData('text', `${card.card} ${card.suit}`);
+// Handle drag start event
+function handleDragStart(event) {
+  draggedCard = JSON.parse(event.target.getAttribute('data-card'));
+  draggedFromHand = true;
 }
 
-function handleDragOver(e) {
-  e.preventDefault();  // Allow drop
+// Handle drag over event
+function handleDragOver(event) {
+  event.preventDefault(); // Allow drop
 }
 
-function handleDrop(e, targetCard) {
-  e.preventDefault();
+// Handle drop event (either grab or stack)
+function handleDrop(event) {
+  event.preventDefault();
 
-  // Check if we are stacking or grabbing a card
-  if (draggedCard.card === targetCard.card && draggedCard.suit === targetCard.suit) {
-    // Grab the card
-    socket.emit('play card', {
-      playedCard: draggedCard,
-      targetCard: targetCard
-    });
+  const droppedCard = JSON.parse(event.target.getAttribute('data-card'));
+  let actionType = '';
+
+  // If dragged card is from hand and matches a card on table, it's a grab
+  if (draggedFromHand && draggedCard.card === droppedCard.card && draggedCard.suit === droppedCard.suit) {
+    actionType = 'grab';
   } else {
-    // Stack the card on top of the target card
-    const stackSum = prompt('Enter the current sum of the stack you want to add to:');
-    if (stackSum) {
-      socket.emit('play card', {
-        playedCard: draggedCard,
-        stackTarget: { sum: parseInt(stackSum) }
-      });
-    }
+    // Otherwise, it's a stack action
+    const stackSum = tableCards.reduce((sum, card) => sum + card.card, 0);
+    actionType = 'stack';
   }
+
+  // Send the action to the backend
+  socket.emit('play card', {
+    playedCard: draggedCard,
+    targetCard: droppedCard,
+    stackTarget: { sum: stackSum }
+  });
+
+  // Reset dragged state
+  draggedCard = null;
+  draggedFromHand = false;
 }
 
-// Add event listener to the table for generic drop zones
-document.getElementById('tableCards').addEventListener('dragover', handleDragOver);
-document.getElementById('tableCards').addEventListener('drop', (e) => {
-  e.preventDefault();
-  // Logic to handle dropping on an empty space can go here
-});
+// Function to play a card (used in drag-and-drop case)
+function playCard(cardValue, cardSuit) {
+  // This will be handled by the drag-and-drop functionality above
+}
