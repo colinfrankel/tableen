@@ -116,9 +116,75 @@ function handleDrop(event) {
   // Reset dragged state
   draggedCard = null;
   draggedFromHand = false;
-}
+  function handleDrop(event) {
+    event.preventDefault();
+  
+    const droppedCard = JSON.parse(event.target.getAttribute('data-card'));
+    let actionType = '';
+    let stackSum = 0;  // Initialize stackSum
+  
+    // If dragged card is from hand and matches a card on table, it's a grab
+    if (draggedFromHand && draggedCard.card === droppedCard.card && draggedCard.suit === droppedCard.suit) {
+      actionType = 'grab';
+    } else {
+      // Ensure tableCards is an array
+      if (Array.isArray(tableCards)) {
+        stackSum = tableCards.reduce((sum, card) => sum + card.card, 0);  // Calculate the sum of the stack
+      }
+      actionType = 'stack';
+    }
+  
+    // Send the action to the backend
+    socket.emit('play card', {
+      playedCard: draggedCard,
+      targetCard: droppedCard,
+      stackTarget: { sum: stackSum },  // Include stackSum in the data
+      actionType: actionType  // Optionally send the action type (grab or stack)
+    });
+  
+    // Reset dragged state
+    draggedCard = null;
+    draggedFromHand = false;
+  }
+}  
 
 // Function to play a card (used in drag-and-drop case)
-function playCard(cardValue, cardSuit) {
-  // This will be handled by the drag-and-drop functionality above
+function playCard(cardValue, cardSuit, actionType) {
+  const playedCard = { card: cardValue, suit: cardSuit };
+
+  // Check the action type (grab or stack)
+  const action = actionType || prompt('Enter "grab" to grab a card, "stack" to stack on a pile, or leave blank to play a new card.');
+
+  if (action === 'grab') {
+    // Assuming dragging the card to a target card will trigger a grab
+    const targetCard = getDraggedCard(); // This function should return the dragged target card object
+
+    if (targetCard) {
+      // Emit the play card event with targetCard for grabbing
+      socket.emit('play card', {
+        playedCard: playedCard,
+        targetCard: targetCard,
+        actionType: 'grab' // Action is grab
+      });
+    }
+  } else if (action === 'stack') {
+    // Assuming dragging the card to a stack will trigger a stack
+    const stackSum = getStackSum(); // This function should calculate the sum of the current stack on the table
+
+    if (stackSum) {
+      // Emit the play card event with stackTarget for stacking
+      socket.emit('play card', {
+        playedCard: playedCard,
+        stackTarget: { sum: stackSum }, // Stack target sum
+        actionType: 'stack' // Action is stack
+      });
+    }
+  } else {
+    // Default play: just play the card to the table
+    socket.emit('play card', {
+      playedCard: playedCard,
+      actionType: 'play' // Standard play (no grab or stack)
+    });
+  }
 }
+
