@@ -85,6 +85,7 @@ function updateGameUI(data, isYourTurn) {
 function updateTableCards(tableCards) {
   const tableCardsDiv = document.getElementById('tableCards');
   tableCardsDiv.innerHTML = '';
+  let draggedTableCard;
 
   tableCards.forEach((stack, index) => {
     // Create a container for each stack
@@ -101,29 +102,32 @@ function updateTableCards(tableCards) {
       stackDiv.appendChild(cardElement);
     });
 
-
+    stackDiv.addEventListener('dragstart', function (e) {
+      draggedTableCard = { 
+        card: parseInt(e.target?.getAttribute("src")?.split("/")[3]?.split(".")[0]),
+        suit: e.target.getAttribute("src")?.split("/")[2]
+      };
+    });
 
     // Handle dragover for stack
     let cardTarget;
     stackDiv.addEventListener('dragover', function (e) {
       e.preventDefault();
       cardTarget = {
-        card: parseInt(e.explicitOriginalTarget?.getAttribute("src")?.split("/")[3]?.split(".")[0]),
-        suit: e.explicitOriginalTarget.getAttribute("src")?.split("/")[2]
+        card: parseInt(e.target?.getAttribute("src")?.split("/")[3]?.split(".")[0]),
+        suit: e.target.getAttribute("src")?.split("/")[2]
       }
     });
 
     // Handle drop on stack
     stackDiv.addEventListener('drop', function (e) {
       e.preventDefault();
-      console.log(draggedCard)
-      console.log(tableCards)
-      console.log(tableCards.includes(draggedCard))
       if (draggedCard) {
         playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack");
         draggedCard = null;
       } else {
-        playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "normal");
+        // board stack
+        playCard(draggedTableCard.card, draggedTableCard.suit, cardTarget.card, cardTarget.suit, "boardstack");
       }
     });
 
