@@ -147,9 +147,9 @@ var fullDeck = [
   
       const { playedCard, targetCard, actionType } = data;
       const playerKey = socket.id === playerOneId ? 'playerOne' : 'playerTwo';
-  
+    
       const playedIndex = playerHands[playerKey].findIndex(card =>
-        card.card === playedCard.card && card.suit === playedCard.suit
+        card[0].card === playedCard.card && card[0].suit === playedCard.suit
       );
   
       if (playedIndex === -1) {
@@ -160,7 +160,7 @@ var fullDeck = [
         console.log("GRAB")
         // Handle the "grab" action
         const targetIndex = tableCards.findIndex(card =>
-          card.card === targetCard.card && card.suit === targetCard.suit
+          card[0].card === targetCard.card && card[0].suit === targetCard.suit
         );
   
         if (targetIndex !== -1) {
@@ -183,8 +183,12 @@ var fullDeck = [
         // Handle the "stack" action
         const cardToStack = playerHands[playerKey].splice(playedIndex, 1)[0];
         const stackSum = cardToStack.card + targetCard.card;
-        tableCards.push(cardToStack);
-        console.log(tableCards)
+        const targetIndex = tableCards.findIndex(card =>
+          card[0].card === targetCard.card && card[0].suit === targetCard.suit
+        );
+        
+        tableCards[targetIndex].push(cardToStack[0]);
+        console.log(tableCards[targetIndex])
         io.sockets.emit('update table', tableCards);
       } else {
         console.log("ADD CARD TO PILE")

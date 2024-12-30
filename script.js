@@ -55,14 +55,14 @@ function updateGameUI(data, isYourTurn) {
   // Populate player's hand with draggable cards
   data.hand.forEach(card => {
     const cardElement = document.createElement('img');
-    cardElement.src = `./cards/${card.suit}/${card.card}.svg`;
+    cardElement.src = `./cards/${card[0].suit}/${card[0].card}.svg`;
     cardElement.classList.add('card');
     cardElement.setAttribute('draggable', true);
     cardElement.dataset.card = card.card;
     cardElement.dataset.suit = card.suit;
 
     cardElement.addEventListener('dragstart', function (e) {
-      draggedCard = { card: card.card, suit: card.suit };
+      draggedCard = { card: card[0].card, suit: card[0].suit };
     });
 
     document.getElementById('cards').appendChild(cardElement);
@@ -85,20 +85,40 @@ function updateGameUI(data, isYourTurn) {
 function updateTableCards(tableCards) {
   const tableCardsDiv = document.getElementById('tableCards');
   tableCardsDiv.innerHTML = '';
-  tableCards.forEach(card => {
-    const cardElement = document.createElement('img');
-    cardElement.src = `./cards/${card.suit}/${card.card}.svg`;
-    cardElement.classList.add('card');
+
+  tableCards.forEach((stack, index) => {
+    // Create a container for each stack
+    const stackDiv = document.createElement('div');
+    stackDiv.classList.add('stack');
+    stackDiv.dataset.index = index;
+
+    // Render each card in the stack
+    stack.forEach((card, index) => {
+      const cardElement = document.createElement('img');
+      cardElement.src = `./cards/${card.suit}/${card.card}.svg`;
+      cardElement.style = `--stack-index: ${index};`
+      cardElement.classList.add('card');
+      stackDiv.appendChild(cardElement);
+    });
+
+
+
+    // Handle dragover for stack
     let cardTarget;
-    cardElement.addEventListener('dragover', function (e) {
+    stackDiv.addEventListener('dragover', function (e) {
       e.preventDefault();
       cardTarget = {
-        card: parseInt(e.explicitOriginalTarget.getAttribute("src").split("/")[3].split(".")[0]),
-        suit: e.explicitOriginalTarget.getAttribute("src").split("/")[2]
+        card: parseInt(e.explicitOriginalTarget?.getAttribute("src")?.split("/")[3]?.split(".")[0]),
+        suit: e.explicitOriginalTarget.getAttribute("src")?.split("/")[2]
       }
     });
-    cardElement.addEventListener('drop', function (e) {
+
+    // Handle drop on stack
+    stackDiv.addEventListener('drop', function (e) {
       e.preventDefault();
+      console.log(draggedCard)
+      console.log(tableCards)
+      console.log(tableCards.includes(draggedCard))
       if (draggedCard) {
         playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack");
         draggedCard = null;
@@ -106,15 +126,19 @@ function updateTableCards(tableCards) {
         playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "normal");
       }
     });
-    tableCardsDiv.appendChild(cardElement);
+
+    tableCardsDiv.appendChild(stackDiv);
   });
 }
 
+
 // Function to handle card play
-function playCard(cardValue, cardSuit, targetValue, targetSuit, actionType) {
+function playCard(cardValue, cardSuit, targetValue, targetSuit, actionType, stackIndex = null) {
   socket.emit('play card', {
     playedCard: { card: cardValue, suit: cardSuit },
-    targetCard: {card: targetValue, suit: targetSuit},
-    actionType: actionType
+    targetCard: { card: targetValue, suit: targetSuit },
+    actionType: actionType,
+    stackIndex: stackIndex,
   });
 }
+
