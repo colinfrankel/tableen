@@ -105,7 +105,7 @@ function updateTableCards(tableCards) {
     });
 
     stackDiv.addEventListener('dragstart', function (e) {
-      draggedTableCard = { 
+      draggedTableCard = {
         card: parseInt(e.target?.getAttribute("src")?.split("/")[3]?.split(".")[0]),
         suit: e.target.getAttribute("src")?.split("/")[2]
       };
@@ -130,22 +130,30 @@ function updateTableCards(tableCards) {
 
       if (draggedCard) {
         if (tableCards[targetIndex].length == 1) {
-          playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack");
+          const stackSum = tableCards[targetIndex][0].card + draggedCard.card
+          playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack", stackSum);
         } else {
-          // TODO only prompt when the (unimplemented) stackSum matches the current card value
-          const shouldGrab = confirm("Grab this pile too?")
-          if (shouldGrab) {
-            playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "grab");
+          const stackSum = tableCards[targetIndex].reduce((acc, num) => acc + num.card, 0) + draggedCard.card
+          if (draggedCard.card == tableCards[targetIndex].reduce((acc, num) => acc + num.card, 0)) {
+            const shouldGrab = confirm("Grab this pile too?")
+            if (shouldGrab) {
+              playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "grab", stackSum);
+            } else {
+              playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack", stackSum);
+            }
           } else {
-            playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack");
+            playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack", stackSum);
           }
+
           
+
         }
-        
+
         draggedCard = null;
       } else {
         // board stack
-        playCard(draggedTableCard.card, draggedTableCard.suit, cardTarget.card, cardTarget.suit, "boardstack");
+        const stackSum = tableCards[targetIndex].reduce((acc, num) => acc + num.card, 0) + draggedTableCard.card
+        playCard(draggedTableCard.card, draggedTableCard.suit, cardTarget.card, cardTarget.suit, "boardstack", stackSum);
       }
     });
 
@@ -155,12 +163,20 @@ function updateTableCards(tableCards) {
 
 
 // Function to handle card play
-function playCard(cardValue, cardSuit, targetValue, targetSuit, actionType, stackIndex = null) {
-  socket.emit('play card', {
-    playedCard: { card: cardValue, suit: cardSuit },
-    targetCard: { card: targetValue, suit: targetSuit },
-    actionType: actionType,
-    stackIndex: stackIndex,
-  });
+function playCard(cardValue, cardSuit, targetValue, targetSuit, actionType, stackSum) {
+  if (stackSum) {
+    socket.emit('play card', {
+      playedCard: { card: cardValue, suit: cardSuit, stackSum: stackSum },
+      targetCard: { card: targetValue, suit: targetSuit, stackSum: stackSum },
+      actionType: actionType,
+    });
+  } else {
+    socket.emit('play card', {
+      playedCard: { card: cardValue, suit: cardSuit },
+      targetCard: { card: targetValue, suit: targetSuit },
+      actionType: actionType,
+    });
+  }
+
 }
 

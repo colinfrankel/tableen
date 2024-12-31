@@ -256,7 +256,6 @@ io.on('connection', (socket) => {
     }
     // Switch turn
     if (turnOver) {
-      const myNumberOfCards = playerHands[playerKey].length
       currentPlayer = socket.id === playerOneId ? playerTwoId : playerOneId;
 
       io.sockets.sockets.get(currentPlayer).emit('your turn', {
