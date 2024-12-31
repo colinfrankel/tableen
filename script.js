@@ -3,6 +3,7 @@ let socket = io("http://localhost:3000");
 
 socket.on('connect', function () {
   console.log("Connected to server!");
+  document.getElementById('title').innerHTML = 'Waiting for another player...';
   socket.emit('create user');
 });
 

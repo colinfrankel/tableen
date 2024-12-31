@@ -177,16 +177,26 @@ io.on('connection', (socket) => {
       }
       turnOver = true
     } else if (actionType == "stack") {
-      console.log("STACK")
-      // Handle the "stack" action
-      const cardToStack = playerHands[playerKey].splice(playedIndex, 1)[0];
-      const targetIndex = tableCards.findIndex(card =>
-        card[0].card === targetCard.card && card[0].suit === targetCard.suit
-      );
+      console.log("STACK");
 
-      tableCards[targetIndex].push(cardToStack[0]);
+      const cardToStack = playerHands[playerKey].splice(playedIndex, 1)[0];
+  
+      const targetIndex = tableCards.findIndex(stack =>
+        stack.some(card => card.card === targetCard.card && card.suit === targetCard.suit)
+      );
+      
+      if (targetIndex === -1) {
+        console.log("Error: Target stack not found.");
+        return;
+      }
+
+      cardToStack.forEach(card => {
+        tableCards[targetIndex].push(card)
+      })
+
       io.sockets.emit('update table', tableCards);
-      turnOver = true
+      turnOver = true;      
+      
     } else if (actionType == "normal") {
       console.log("ADD CARD TO PILE")
       // Normal play
@@ -200,20 +210,28 @@ io.on('connection', (socket) => {
       }
       turnOver = true
     } else {
-      console.log("INTERBOARD STACK")
-      const firstToStack = data.playedCard
-      const secondToStack = data.targetCard
+      console.log("INTERBOARD STACK");
 
-      const firstToStackIndex = tableCards.findIndex(card =>
-        card[0].card === firstToStack.card && card[0].suit === firstToStack.suit
+      const firstToStack = data.playedCard;
+      const secondToStack = data.targetCard;
+
+      const firstToStackIndex = tableCards.findIndex(stack =>
+        stack.some(card => card.card === firstToStack.card && card.suit === firstToStack.suit)
       );
-      const secondToStackIndex = tableCards.findIndex(card =>
-        card[0].card === secondToStack.card && card[0].suit === secondToStack.suit
+      const secondToStackIndex = tableCards.findIndex(stack =>
+        stack.some(card => card.card === secondToStack.card && card.suit === secondToStack.suit)
       );
 
-      tableCards[firstToStackIndex].push(tableCards[secondToStackIndex][0]);
-      tableCards.splice(secondToStackIndex, 1)
+      if (firstToStackIndex === -1 || secondToStackIndex === -1) {
+        console.log("Error: One or both cards are not found on the table.");
+        return;
+      }
+
+      tableCards[secondToStackIndex].push(...tableCards[firstToStackIndex]);
+      tableCards.splice(firstToStackIndex, 1);
       io.sockets.emit('update table', tableCards);
+
+
     }
 
     // Switch turn
