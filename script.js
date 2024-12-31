@@ -28,6 +28,7 @@ socket.on('status', function (status) {
   alert(status);
 });
 
+
 document.body.addEventListener('dragover', (e) => {
   e.preventDefault();
 });
@@ -123,8 +124,24 @@ function updateTableCards(tableCards) {
     // Handle drop on stack
     stackDiv.addEventListener('drop', function (e) {
       e.preventDefault();
+      const targetIndex = tableCards.findIndex(stack =>
+        stack.some(card => card.card === cardTarget.card && card.suit === cardTarget.suit)
+      );
+
       if (draggedCard) {
-        playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack");
+        if (tableCards[targetIndex].length == 1) {
+          playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack");
+        } else {
+          // TODO only prompt when the (unimplemented) stackSum matches the current card value
+          const shouldGrab = confirm("Grab this pile too?")
+          if (shouldGrab) {
+            playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "grab");
+          } else {
+            playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack");
+          }
+          
+        }
+        
         draggedCard = null;
       } else {
         // board stack

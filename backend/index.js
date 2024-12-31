@@ -157,34 +157,43 @@ io.on('connection', (socket) => {
     if (playedCard.card == targetCard.card && actionType == "stack") {
       console.log("GRAB")
       // Handle the "grab" action
-      const targetIndex = tableCards.findIndex(card =>
-        card[0].card === targetCard.card && card[0].suit === targetCard.suit
+      const targetIndex = tableCards.findIndex(stack =>
+        stack.some(card => card.card === targetCard.card && card.suit === targetCard.suit)
       );
 
-      if (targetIndex !== -1) {
-        if (playedCard.card === targetCard.card) {
-          tableCards.splice(targetIndex, 1);
-          playerHands[playerKey].splice(playedIndex, 1)[0]
-          // TODO ADD TO LIST OF PLAYERS COLLECTED CARDS
-          io.sockets.emit('update table', tableCards);
+      if (tableCards[targetIndex].length == 1) {
+        console.log("SINGLE CARD GRAB")
+        if (targetIndex !== -1) {
+          if (playedCard.card === targetCard.card) {
+            tableCards.splice(targetIndex, 1);
+            playerHands[playerKey].splice(playedIndex, 1)[0]
+            // TODO ADD TO LIST OF PLAYERS COLLECTED CARDS
+            io.sockets.emit('update table', tableCards);
+          } else {
+            socket.emit('status', 'Invalid move: Cards do not match for grabbing.');
+            return;
+          }
         } else {
-          socket.emit('status', 'Invalid move: Cards do not match for grabbing.');
+          socket.emit('status', 'Invalid move: Target card not on table.');
           return;
         }
       } else {
-        socket.emit('status', 'Invalid move: Target card not on table.');
-        return;
+        console.log("STACK")
+        tableCards[targetIndex].push(targetCard)
+        playerHands[playerKey].splice(playedIndex, 1)[0]
+        io.sockets.emit('update table', tableCards);
       }
+
       turnOver = true
     } else if (actionType == "stack") {
       console.log("STACK");
 
       const cardToStack = playerHands[playerKey].splice(playedIndex, 1)[0];
-  
+
       const targetIndex = tableCards.findIndex(stack =>
         stack.some(card => card.card === targetCard.card && card.suit === targetCard.suit)
       );
-      
+
       if (targetIndex === -1) {
         console.log("Error: Target stack not found.");
         return;
@@ -195,8 +204,8 @@ io.on('connection', (socket) => {
       })
 
       io.sockets.emit('update table', tableCards);
-      turnOver = true;      
-      
+      turnOver = true;
+
     } else if (actionType == "normal") {
       console.log("ADD CARD TO PILE")
       // Normal play
@@ -209,7 +218,7 @@ io.on('connection', (socket) => {
         return;
       }
       turnOver = true
-    } else {
+    } else if (actionType == "boardstack") {
       console.log("INTERBOARD STACK");
 
       const firstToStack = data.playedCard;
@@ -232,8 +241,19 @@ io.on('connection', (socket) => {
       io.sockets.emit('update table', tableCards);
 
 
-    }
+    } else if (actionType == "grab") {
+      console.log("MULTICARD GRAB")
 
+      const targetIndex = tableCards.findIndex(stack =>
+        stack.some(card => card.card === targetCard.card && card.suit === targetCard.suit)
+      );
+
+      // TODO add to list for players grabbed cards
+      tableCards.splice(targetIndex, 1);
+      playerHands[playerKey].splice(playedIndex, 1)[0]
+      io.sockets.emit('update table', tableCards);
+      turnOver = true
+    }
     // Switch turn
     if (turnOver) {
       const myNumberOfCards = playerHands[playerKey].length
