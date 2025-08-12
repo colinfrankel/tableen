@@ -176,7 +176,8 @@ io.on('connection', (socket) => {
       // Update game state
       games[gameCode] = newState;
       // Only switch turn if action is not boardstack
-      if (payload.actionType !== 'boardstack') {
+      console.log(payload)
+      if (payload.type !== 'boardstack') {
         const opponentKey = playerKey === 'playerOne' ? 'playerTwo' : 'playerOne';
         game.currentPlayer = game.playerIds[opponentKey];
         io.to(game.currentPlayer).emit('your turn', {

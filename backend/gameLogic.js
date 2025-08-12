@@ -9,7 +9,13 @@ function resolveStackIndex(gameState, id) {
   return gameState.tableCards.findIndex(stack => stack.id === id);
 }
 
-function validateAndApplyAction(gameState, action) {
+function removeCardFromHand(gameState, playerKey, card) {
+  const hand = gameState.playerHands[playerKey];
+  const idx = hand.findIndex(arr => arr[0].card === card.card && arr[0].suit === card.suit);
+  if (idx !== -1) hand.splice(idx, 1);
+}
+
+function validateAndApplyAction(gameState, action, playerKey) {
   console.log('Received action:', action);
 
   // STACK
@@ -20,6 +26,9 @@ function validateAndApplyAction(gameState, action) {
     const playedCard = action.playedCard;
     if (!playedCard) return { error: 'No card played.' };
 
+    // Remove card from hand
+    removeCardFromHand(gameState, playerKey, playedCard);
+
     // If stacking as sum
     if (action.stackAsSum) {
       const sum = stack.cards[0].card + playedCard.card;
@@ -28,9 +37,14 @@ function validateAndApplyAction(gameState, action) {
       stack.stackNumber = sum;
       return { newState: gameState };
     } else {
-      // Stack as two cards (not sum)
       stack.cards.push(playedCard);
-      stack.stackNumber = stack.cards[0].card;
+      // If all cards in stack are the same value, keep that value; otherwise, use the sum
+      const allSame = stack.cards.every(c => c.card === stack.cards[0].card);
+      if (allSame) {
+        stack.stackNumber = stack.cards[0].card;
+      } else {
+        stack.stackNumber = stack.cards.reduce((sum, c) => sum + c.card, 0);
+      }
       return { newState: gameState };
     }
   }
@@ -39,6 +53,10 @@ function validateAndApplyAction(gameState, action) {
   if (action.type === 'normal') {
     const playedCard = action.playedCard;
     if (!playedCard) return { error: 'No card played.' };
+
+    // Remove card from hand
+    removeCardFromHand(gameState, playerKey, playedCard);
+
     gameState.tableCards.push({
       id: generateStackId(),
       cards: [playedCard],
@@ -51,6 +69,12 @@ function validateAndApplyAction(gameState, action) {
   if (action.type === 'grab') {
     const stackIndex = action.stackId ? resolveStackIndex(gameState, action.stackId) : -1;
     if (stackIndex === -1) return { error: 'Stack not found.' };
+
+    const playedCard = action.playedCard;
+    if (playedCard) {
+      removeCardFromHand(gameState, playerKey, playedCard);
+    }
+
     // Remove the stack from the table
     gameState.tableCards.splice(stackIndex, 1);
     // (You may want to add logic to give the stack to the player)
@@ -78,7 +102,13 @@ function validateAndApplyAction(gameState, action) {
     } else {
       // Stack as two cards (not sum)
       toStack.cards = [...toStack.cards, ...fromStack.cards];
-      toStack.stackNumber = toStack.cards[0].card;
+      // If all cards in stack are the same value, keep that value; otherwise, use the sum
+      const allSame = toStack.cards.every(c => c.card === toStack.cards[0].card);
+      if (allSame) {
+        toStack.stackNumber = toStack.cards[0].card;
+      } else {
+        toStack.stackNumber = toStack.cards.reduce((sum, c) => sum + c.card, 0);
+      }
       gameState.tableCards.splice(fromIndex, 1);
       return { newState: gameState };
     }
