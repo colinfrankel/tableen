@@ -1,32 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tabline</title>
-  <link href="style.css" rel="stylesheet" type="text/css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tabline — Multiplayer</title>
+  <link href="style.css" rel="stylesheet" />
 </head>
-
 <body>
-  <h1 id="title">Error: Cannot Connect!</h1>
-  <div class="container">
-    <div id="turnStatus"></div>
-
-    <div id="opponentCards" class="card-container">
-      <img src="cards/cardback.svg" class="card">
-      <img src="cards/cardback.svg" class="card">
-      <img src="cards/cardback.svg" class="card">
-      <img src="cards/cardback.svg" class="card">
+  <header>
+    <h1 id="title">Tabline</h1>
+    <div id="lobby">
+      <button id="createBtn">Create Game</button>
+      <input id="joinCode" placeholder="Enter game code" maxlength="8" />
+      <button id="joinBtn">Join Game</button>
+      <div id="gameCodeBox" class="hidden">
+        Share this code to join a game: <span id="gameCode"></span>
+      </div>
+      <div id="lobbyStatus"></div>
     </div>
+  </header>
 
-    <div id="tableCards" class="card-container"></div>
+  <main>
+    <div class="container">
+      <div id="turnStatus"></div>
 
-    <div id="cards" class="card-container"></div>
-  </div>
+      <div id="opponentCards" class="card-container">
+        <!-- opponent cards rendered here -->
+      </div>
+
+      <div id="tableCards" class="card-container"></div>
+
+      <div id="cards" class="card-container"></div>
+    </div>
+  </main>
 
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
   <script src="script.js" defer></script>
 </body>
-
+  <!-- Modal for stack choice -->
+  <div id="modalOverlay" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-message" id="modalMessage"></div>
+      <div class="modal-buttons">
+        <button id="modalOption1">Stack as two cards</button>
+        <button id="modalOption2">Stack as sum</button>
+      </div>
+    </div>
+  </div>
 </html>

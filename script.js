@@ -1,70 +1,151 @@
+// Modal logic
+function showStackChoiceModal(message, onChoice) {
+  const overlay = document.getElementById('modalOverlay');
+  const msg = document.getElementById('modalMessage');
+  const btns = document.querySelector('.modal-buttons');
+  msg.textContent = message || 'Stack as two cards or as a single sum?';
+  overlay.classList.remove('hidden');
+  btns.innerHTML = '<button id="modalOption1">Stack</button><button id="modalOption2">Sum</button>';
+  const btn1 = document.getElementById('modalOption1');
+  const btn2 = document.getElementById('modalOption2');
+  function cleanup() {
+    overlay.classList.add('hidden');
+    btn1.removeEventListener('click', asTwo);
+    btn2.removeEventListener('click', asSum);
+  }
+  function asTwo() { cleanup(); onChoice('stack'); }
+  function asSum() { cleanup(); onChoice('sum'); }
+  btn1.addEventListener('click', asTwo);
+  btn2.addEventListener('click', asSum);
+}
+
 let draggedCard = null;
+let draggedTableCard = null;
+let currentGameCode = null;
 let socket = io("http://localhost:3000");
 
-socket.on('connect', function () {
-  console.log("Connected to server!");
-  document.getElementById('title').innerHTML = 'Waiting for another player...';
-  socket.emit('create user');
+// UI elements
+const createBtn = document.getElementById('createBtn');
+const joinBtn = document.getElementById('joinBtn');
+const joinCodeInput = document.getElementById('joinCode');
+const gameCodeBox = document.getElementById('gameCodeBox');
+const gameCodeSpan = document.getElementById('gameCode');
+const lobbyStatus = document.getElementById('lobbyStatus');
+
+createBtn.addEventListener('click', () => {
+  socket.emit('create game', (res) => {});
 });
 
-socket.on('disconnect', function () {
-  document.body.innerHTML = 'Disconnected, reload to start a new game';
+joinBtn.addEventListener('click', () => {
+  const code = (joinCodeInput.value || '').trim().toUpperCase();
+  if (!code) return alert('Enter a game code.');
+  socket.emit('join game', code, (res) => {
+    if (res && res.ok) {
+      currentGameCode = res.code;
+      showGameCode(res.code);
+    } else {
+      console.error('Join game error:', res);
+      alert((res && res.message) || 'Could not join game.');
+    }
+  });
 });
 
-// Update game UI with the current player's cards and table
-socket.on('your turn', function (data) {
+function showGameCode(code) {
+  gameCodeSpan.innerText = code;
+  gameCodeBox.classList.remove('hidden');
+  lobbyStatus.innerText = `In game ${code}`;
+}
+
+// socket events
+socket.on('connect', () => {
+  console.log('Connected to server');
+});
+
+socket.on('game created', ({ code }) => {
+  currentGameCode = code;
+  showGameCode(code);
+  lobbyStatus.innerText = `Game ${code} created — waiting for other player...`;
+});
+
+socket.on('joined', (data) => {
+  lobbyStatus.innerText = `Game ${data.code} started!`;
+});
+
+socket.on('your turn', (data) => {
+  currentGameCode = data.gameCode || currentGameCode;
   updateGameUI(data, true);
 });
 
-socket.on('wait', function (data) {
+socket.on('wait', (data) => {
+  currentGameCode = data.gameCode || currentGameCode;
   updateGameUI(data, false);
 });
 
-socket.on('update table', function (table) {
+socket.on('update table', (table) => {
   updateTableCards(table);
 });
 
-socket.on('status', function (status) {
-  alert(status);
+// Show status in a modal (replace alert)
+function showStatusModal(msg) {
+  const overlay = document.getElementById('modalOverlay');
+  const msgDiv = document.getElementById('modalMessage');
+  const btns = document.querySelector('.modal-buttons');
+  msgDiv.textContent = msg;
+  overlay.classList.remove('hidden');
+  btns.innerHTML = '<button id="modalOk">OK</button>';
+  document.getElementById('modalOk').onclick = () => overlay.classList.add('hidden');
+}
+
+socket.on('status', (msg) => {
+  showStatusModal(msg);
+  console.log('Status:', msg);
 });
 
-
-document.body.addEventListener('dragover', (e) => {
-  e.preventDefault();
+socket.on('opponent disconnected', (data) => {
+  alert(data.message || 'Opponent disconnected. The game ended.');
+  document.getElementById('title').innerText = 'Opponent disconnected';
 });
 
-document.body.addEventListener('drop', function (e) {
+// drag/drop base handlers
+document.body.addEventListener('dragover', (e) => e.preventDefault());
+document.body.addEventListener('drop', (e) => {
   e.preventDefault();
-  e.stopPropagation()
-  if (draggedCard && e.explicitOriginalTarget.getAttribute("class") != "card") {
-    playCard(draggedCard.card, draggedCard.suit, undefined, undefined, "normal");
+  e.stopPropagation();
+  // if dropped outside a stack, play normally (new pile)
+  if (draggedCard) {
+    playCard({
+      type: "normal",
+      gameCode: currentGameCode,
+      playedCard: { card: draggedCard.card, suit: draggedCard.suit }
+    });
+    draggedCard = null;
   }
-})
+});
 
-// Function to update the game UI
+// Update UI with player's hand + table
 function updateGameUI(data, isYourTurn) {
   document.getElementById('title').innerHTML = '';
   document.getElementById('cards').innerHTML = '';
   document.getElementById('opponentCards').style.display = 'flex';
-  document.getElementById('opponentCards').innerHTML = ''
-  for (i = 1; i < data.opponentCards + 1; i++) {
+  document.getElementById('opponentCards').innerHTML = '';
+
+  for (let i = 1; i <= data.opponentCards; i++) {
     const opponentCardElement = document.createElement('img');
     opponentCardElement.src = `./cards/cardback.svg`;
     opponentCardElement.classList.add('card');
     document.getElementById('opponentCards').appendChild(opponentCardElement);
   }
 
-  // Populate player's hand with draggable cards
-  data.hand.forEach(card => {
+  // player's hand (draggable)
+  data.hand.forEach(cardArray => {
+    const card = cardArray[0];
     const cardElement = document.createElement('img');
-    cardElement.src = `./cards/${card[0].suit}/${card[0].card}.svg`;
+    cardElement.src = `./cards/${card.suit}/${card.card}.svg`;
     cardElement.classList.add('card');
     cardElement.setAttribute('draggable', true);
-    cardElement.dataset.card = card.card;
-    cardElement.dataset.suit = card.suit;
 
     cardElement.addEventListener('dragstart', function (e) {
-      draggedCard = { card: card[0].card, suit: card[0].suit };
+      draggedCard = { card: card.card, suit: card.suit, stackSum: card.stackSum };
     });
 
     document.getElementById('cards').appendChild(cardElement);
@@ -72,88 +153,162 @@ function updateGameUI(data, isYourTurn) {
 
   updateTableCards(data.table);
 
-  // Show turn status
   const turnStatus = document.getElementById('turnStatus');
   if (isYourTurn) {
     turnStatus.innerText = 'Your turn!';
-    turnStatus.style.color = 'green';
+    turnStatus.style.color = 'lime';
   } else {
     turnStatus.innerText = 'Wait for your opponent...';
     turnStatus.style.color = 'red';
   }
 }
 
-// Function to update table cards
+// update table stacks rendering
 function updateTableCards(tableCards) {
+  window.lastTableState = tableCards;
   const tableCardsDiv = document.getElementById('tableCards');
   tableCardsDiv.innerHTML = '';
-  let draggedTableCard;
 
-  tableCards.forEach((stack, index) => {
-    // Create a container for each stack
+  tableCards.forEach((stackObj, stackIndex) => {
     const stackDiv = document.createElement('div');
     stackDiv.classList.add('stack');
-    stackDiv.dataset.index = index;
+    stackDiv.dataset.index = stackIndex;
+    stackDiv.dataset.stackId = stackObj.id;
 
     // Render each card in the stack
-    stack.forEach((card, index) => {
+    stackObj.cards.forEach((card, idx) => {
       const cardElement = document.createElement('img');
       cardElement.src = `./cards/${card.suit}/${card.card}.svg`;
-      cardElement.style = `--stack-index: ${index};`
       cardElement.classList.add('card');
+      cardElement.style.setProperty('--stack-index', idx);
+      cardElement.setAttribute('draggable', true);
+      cardElement.addEventListener('dragstart', (e) => {
+        draggedTableCard = { card: card.card, suit: card.suit, stackIndex, stackId: stackObj.id };
+      });
       stackDiv.appendChild(cardElement);
     });
 
-    stackDiv.addEventListener('dragstart', function (e) {
-      draggedTableCard = {
-        card: parseInt(e.target?.getAttribute("src")?.split("/")[3]?.split(".")[0]),
-        suit: e.target.getAttribute("src")?.split("/")[2]
-      };
-    });
+    // Always show stack number (now explicit)
+    const stackNumberDiv = document.createElement('div');
+    stackNumberDiv.classList.add('stack-number');
+    stackNumberDiv.innerText = stackObj.stackNumber;
+    stackDiv.appendChild(stackNumberDiv);
 
-    // Handle dragover for stack
-    let cardTarget;
-    stackDiv.addEventListener('dragover', function (e) {
+    // track the last hovered card inside stack for drop target
+    let cardTarget = null;
+    stackDiv.addEventListener('dragover', (e) => {
       e.preventDefault();
-      cardTarget = {
-        card: parseInt(e.target?.getAttribute("src")?.split("/")[3]?.split(".")[0]),
-        suit: e.target.getAttribute("src")?.split("/")[2]
+      const target = document.elementFromPoint(e.clientX, e.clientY);
+      if (target && target.tagName === 'IMG') {
+        const srcParts = (target.getAttribute('src') || '').split('/');
+        const suit = srcParts[2];
+        const cardVal = parseInt(srcParts[3]?.split('.')[0]);
+        cardTarget = { card: cardVal, suit };
+      } else {
+        cardTarget = stackObj.cards[0] ? { card: stackObj.cards[0].card, suit: stackObj.cards[0].suit } : null;
       }
     });
 
-    // Handle drop on stack
-    stackDiv.addEventListener('drop', function (e) {
+    stackDiv.addEventListener('drop', (e) => {
       e.preventDefault();
-      const targetIndex = tableCards.findIndex(stack =>
-        stack.some(card => card.card === cardTarget.card && card.suit === cardTarget.suit)
-      );
-
-      if (draggedCard) {
-        if (tableCards[targetIndex].length == 1) {
-          const stackSum = tableCards[targetIndex][0].card + draggedCard.card
-          playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack", stackSum);
-        } else {
-          const stackSum = tableCards[targetIndex].reduce((acc, num) => acc + num.card, 0) + draggedCard.card
-          if (draggedCard.card == tableCards[targetIndex].reduce((acc, num) => acc + num.card, 0)) {
-            const shouldGrab = confirm("Grab this pile too?")
-            if (shouldGrab) {
-              playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "grab", stackSum);
-            } else {
-              playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack", stackSum);
-            }
-          } else {
-            playCard(draggedCard.card, draggedCard.suit, cardTarget.card, cardTarget.suit, "stack", stackSum);
-          }
-
-          
-
+      if (!cardTarget && stackObj.cards.length === 0) {
+        if (draggedCard) {
+          playCard({
+            type: "normal",
+            gameCode: currentGameCode,
+            playedCard: { card: draggedCard.card, suit: draggedCard.suit }
+          });
+          draggedCard = null;
         }
+        return;
+      }
 
+      // If dragging from hand, stack onto table
+      if (draggedCard) {
+        // If stacking two identical cards (single card stack), prompt for sum/stack
+        if (stackObj.cards.length === 1 && stackObj.cards[0].card === draggedCard.card) {
+          const sum = stackObj.cards[0].card + draggedCard.card;
+          if (sum <= 14) {
+            showStackChoiceModal('Stack as two cards or as a single sum?', (choice) => {
+              playCard({
+                type: "stack",
+                gameCode: currentGameCode,
+                playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                stackId: stackObj.id,
+                stackAsSum: choice === 'sum'
+              });
+              draggedCard = null;
+            });
+            return;
+          }
+        }
+        // If card value matches stack sum, prompt for grab/stack
+        const stackSum = stackObj.cards.reduce((acc, num) => acc + num.card, 0);
+        if (draggedCard.card === stackSum) {
+          showStackChoiceModal('Grab this pile or just stack?', (choice) => {
+            if (choice === 'stack') {
+              playCard({
+                type: "stack",
+                gameCode: currentGameCode,
+                playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                stackId: stackObj.id
+              });
+            } else {
+              playCard({
+                type: "grab",
+                gameCode: currentGameCode,
+                playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                stackId: stackObj.id
+              });
+            }
+            draggedCard = null;
+          });
+          return;
+        }
+        // Otherwise, just stack
+        playCard({
+          type: "stack",
+          gameCode: currentGameCode,
+          playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+          stackId: stackObj.id
+        });
         draggedCard = null;
-      } else {
-        // board stack
-        const stackSum = tableCards[targetIndex].reduce((acc, num) => acc + num.card, 0) + draggedTableCard.card
-        playCard(draggedTableCard.card, draggedTableCard.suit, cardTarget.card, cardTarget.suit, "boardstack", stackSum);
+      } else if (draggedTableCard) {
+        // Boardstack (move a whole table-stack onto another) -- use stack IDs!
+        const fromStack = window.lastTableState.find(s => s.id === draggedTableCard.stackId);
+        const toStack = stackObj;
+        if (!fromStack || !toStack) {
+          showStatusModal('Error: Invalid stacks for boardstack.');
+          draggedTableCard = null;
+          return;
+        }
+        // If both stacks are single cards of the same value and sum <= 14, prompt
+        if (
+          fromStack.cards.length === 1 &&
+          toStack.cards.length === 1 &&
+          fromStack.cards[0].card === toStack.cards[0].card &&
+          fromStack.cards[0].card + toStack.cards[0].card <= 14
+        ) {
+          showStackChoiceModal('Combine as sum or keep as stack?', (choice) => {
+            playCard({
+              type: "boardstack",
+              gameCode: currentGameCode,
+              from: fromStack.id,
+              to: toStack.id,
+              stackAsSum: choice === 'sum'
+            });
+            draggedTableCard = null;
+          });
+          return;
+        }
+        // Otherwise, just send the boardstack action
+        playCard({
+          type: "boardstack",
+          gameCode: currentGameCode,
+          from: fromStack.id,
+          to: toStack.id
+        });
+        draggedTableCard = null;
       }
     });
 
@@ -161,22 +316,8 @@ function updateTableCards(tableCards) {
   });
 }
 
-
-// Function to handle card play
-function playCard(cardValue, cardSuit, targetValue, targetSuit, actionType, stackSum) {
-  if (stackSum) {
-    socket.emit('play card', {
-      playedCard: { card: cardValue, suit: cardSuit, stackSum: stackSum },
-      targetCard: { card: targetValue, suit: targetSuit, stackSum: stackSum },
-      actionType: actionType,
-    });
-  } else {
-    socket.emit('play card', {
-      playedCard: { card: cardValue, suit: cardSuit },
-      targetCard: { card: targetValue, suit: targetSuit },
-      actionType: actionType,
-    });
-  }
-
+function playCard(action) {
+  if (!action.gameCode) action.gameCode = currentGameCode;
+  socket.emit('play card', action);
+  console.log('ACTION SENT:', action);
 }
-
