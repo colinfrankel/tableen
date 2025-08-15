@@ -3,16 +3,22 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Tabline — Multiplayer</title>
+  <title>Tableen — Beta</title>
   <link href="style.css" rel="stylesheet" />
 </head>
 <body>
   <header>
-    <h1 id="title">Tabline</h1>
+    <h1 id="title">Tableen</h1>
     <div id="lobby">
-      <button id="createBtn">Create Game</button>
-      <input id="joinCode" placeholder="Enter game code" maxlength="8" />
-      <button id="joinBtn">Join Game</button>
+      <div class="createContainer">
+        <button id="createBtn">Create Game</button>
+      </div>
+      <p>OR</p>
+      <div class="joinContainer">
+        <input id="joinCode" placeholder="Enter game code" maxlength="8" />
+        <button id="joinBtn">Join Game</button>
+      </div>
+
       <div id="gameCodeBox" class="hidden">
         Share this code to join a game: <span id="gameCode"></span>
       </div>

@@ -15,6 +15,52 @@ header {
   text-align: center;
 }
 
+#lobby {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1em;
+}
+
+#createBtn, #joinBtn {
+  padding: 0.5em 1.5em;
+  font-size: 1em;
+  border-radius: 6px;
+  border: none;
+  background: #0a3d91;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+#createBtn:hover, #joinBtn:hover {
+  background: #1761c7;
+}
+
+#joinCode {
+  padding: 0.5em;
+  font-size: 1em;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  width: 200px;
+}
+
+.createContainer, .joinContainer {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 1em;
+  background: rgba(255, 255, 255, 0.1);
+  width: 300px;
+}
+
+.joinContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5em;
+}
+
 .card-container {
   display: flex;
   justify-content: center;
