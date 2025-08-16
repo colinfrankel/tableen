@@ -9,11 +9,12 @@ function resolveStackIndex(gameState, id) {
   return gameState.tableCards.findIndex(stack => stack.id === id);
 }
 
+// Remove card from hand, treating ace (1) and ace (14) as equivalent
 function removeCardFromHand(gameState, playerKey, card) {
   const hand = gameState.playerHands[playerKey];
   const idx = hand.findIndex(arr => {
     const handCard = arr[0];
-    // Treat ace in hand (card: 1) as matching played ace (card: 14)
+    // Ace weirdness: treat ace in hand (card: 1) as matching played ace (card: 14)
     const isAceMatch = (handCard.card === 1 && card.card === 14) || (handCard.card === 14 && card.card === 1);
     return (handCard.card === card.card && handCard.suit === card.suit) || (isAceMatch && handCard.suit === card.suit);
   });
@@ -87,6 +88,15 @@ function validateAndApplyAction(gameState, action, playerKey) {
 
     const playedCard = action.playedCard;
     if (playedCard) {
+      const stack = gameState.tableCards[stackIndex];
+      // ACE WEIRDNESS: Prevent grabbing a single ace (1) with an ace (14)
+      if (
+        stack.cards.length === 1 &&
+        stack.cards[0].card === 1 &&
+        playedCard.card === 14
+      ) {
+        return { error: 'Cannot pick up an ace with an ace.' };
+      }
       removeCardFromHand(gameState, playerKey, playedCard);
     }
 
