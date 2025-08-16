@@ -236,7 +236,9 @@ io.on('connection', (socket) => {
           gameCode
         });
       }
-      io.to(gameCode).emit('update table', game.tableCards);
+      io.to(game.playerIds.playerOne).emit('update table', game.tableCards, game.playerHands.playerOne);
+      io.to(game.playerIds.playerTwo).emit('update table', game.tableCards, game.playerHands.playerTwo);
+
     }
   });
 

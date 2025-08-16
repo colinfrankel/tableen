@@ -90,27 +90,47 @@ function validateAndApplyAction(gameState, action, playerKey) {
 
   // BOARDSTACK (combine two stacks)
   if (action.type === 'boardstack') {
-  const fromIndex = typeof action.from === 'string' ? resolveStackIndex(gameState, action.from) : -1;
-  const toIndex = typeof action.to === 'string' ? resolveStackIndex(gameState, action.to) : -1;
-  if (fromIndex === -1 || toIndex === -1) return { error: 'One or both table cards not found.' };
-  if (fromIndex === toIndex) return { error: 'Cannot boardstack a stack onto itself.' };
-  const fromStack = gameState.tableCards[fromIndex];
-  const toStack = gameState.tableCards[toIndex];
+    const fromIndex = typeof action.from === 'string' ? resolveStackIndex(gameState, action.from) : -1;
+    const toIndex = typeof action.to === 'string' ? resolveStackIndex(gameState, action.to) : -1;
+    if (fromIndex === -1 || toIndex === -1) return { error: 'One or both table cards not found.' };
+    if (fromIndex === toIndex) return { error: 'Cannot boardstack a stack onto itself.' };
+    const fromStack = gameState.tableCards[fromIndex];
+    const toStack = gameState.tableCards[toIndex];
 
-  // If all cards in both stacks are the same value, just merge (do NOT sum)
-  const allFromSame = fromStack.cards.every(c => c.card === fromStack.cards[0].card);
-  const allToSame = toStack.cards.every(c => c.card === toStack.cards[0].card);
-  const sameValue = allFromSame && allToSame && (fromStack.cards[0].card === toStack.cards[0].card);
+    // If stackAsSum, sum all cards (must be ≤ 14)
+    if (action.stackAsSum) {
+      const allCards = [...fromStack.cards, ...toStack.cards];
+      const sum = allCards.reduce((acc, c) => acc + c.card, 0);
+      if (sum > 14) return { error: 'Cannot create a stack above 14.' };
+      toStack.cards = allCards;
+      toStack.stackNumber = sum;
+      gameState.tableCards.splice(fromIndex, 1);
+      return { newState: gameState };
+    }
 
-  if (sameValue) {
-    toStack.cards = [...toStack.cards, ...fromStack.cards];
-    toStack.stackNumber = toStack.cards[0].card;
-    gameState.tableCards.splice(fromIndex, 1);
-    return { newState: gameState };
-  }
+    // If all cards in both stacks are the same value, just merge (do NOT sum)
+    const allFromSame = fromStack.cards.every(c => c.card === fromStack.cards[0].card);
+    const allToSame = toStack.cards.every(c => c.card === toStack.cards[0].card);
+    const sameValue = allFromSame && allToSame && (fromStack.cards[0].card === toStack.cards[0].card);
 
-  // If stackAsSum, sum all cards (must be ≤ 14)
-  if (action.stackAsSum) {
+    if (sameValue) {
+      toStack.cards = [...toStack.cards, ...fromStack.cards];
+      toStack.stackNumber = toStack.cards[0].card;
+      gameState.tableCards.splice(fromIndex, 1);
+      return { newState: gameState };
+    }
+
+    // If the sum of both stacks matches, allow merging (do NOT sum)
+    const fromSum = fromStack.cards.reduce((acc, c) => acc + c.card, 0);
+    const toSum = toStack.cards.reduce((acc, c) => acc + c.card, 0);
+    if (fromSum === toSum) {
+      toStack.cards = [...toStack.cards, ...fromStack.cards];
+      toStack.stackNumber = toSum;
+      gameState.tableCards.splice(fromIndex, 1);
+      return { newState: gameState };
+    }
+
+    // Otherwise, reject if sum > 14
     const allCards = [...fromStack.cards, ...toStack.cards];
     const sum = allCards.reduce((acc, c) => acc + c.card, 0);
     if (sum > 14) return { error: 'Cannot create a stack above 14.' };
@@ -119,26 +139,6 @@ function validateAndApplyAction(gameState, action, playerKey) {
     gameState.tableCards.splice(fromIndex, 1);
     return { newState: gameState };
   }
-
-  // NEW: If the sum of both stacks matches, allow merging (do NOT sum)
-  const fromSum = fromStack.cards.reduce((acc, c) => acc + c.card, 0);
-  const toSum = toStack.cards.reduce((acc, c) => acc + c.card, 0);
-  if (fromSum === toSum) {
-    toStack.cards = [...toStack.cards, ...fromStack.cards];
-    toStack.stackNumber = toSum;
-    gameState.tableCards.splice(fromIndex, 1);
-    return { newState: gameState };
-  }
-
-  // Otherwise, reject if sum > 14
-  const allCards = [...fromStack.cards, ...toStack.cards];
-  const sum = allCards.reduce((acc, c) => acc + c.card, 0);
-  if (sum > 14) return { error: 'Cannot create a stack above 14.' };
-  toStack.cards = allCards;
-  toStack.stackNumber = sum;
-  gameState.tableCards.splice(fromIndex, 1);
-  return { newState: gameState };
-}
 
   return { error: 'Unknown action type.' };
 }

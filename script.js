@@ -1,22 +1,22 @@
 // Modal logic
-function showStackChoiceModal(message, onChoice) {
+function showStackChoiceModal(message, onChoice, btn1Label = "Stack", btn2Label = "Sum") {
   const overlay = document.getElementById('modalOverlay');
   const msg = document.getElementById('modalMessage');
   const btns = document.querySelector('.modal-buttons');
   msg.textContent = message || 'Stack as two cards or as a single sum?';
   overlay.classList.remove('hidden');
-  btns.innerHTML = '<button id="modalOption1">Stack</button><button id="modalOption2">Sum</button>';
+  btns.innerHTML = `<button id="modalOption1">${btn1Label}</button><button id="modalOption2">${btn2Label}</button>`;
   const btn1 = document.getElementById('modalOption1');
   const btn2 = document.getElementById('modalOption2');
   function cleanup() {
     overlay.classList.add('hidden');
-    btn1.removeEventListener('click', asTwo);
-    btn2.removeEventListener('click', asSum);
+    btn1.removeEventListener('click', asOne);
+    btn2.removeEventListener('click', asTwo);
   }
-  function asTwo() { cleanup(); onChoice('stack'); }
-  function asSum() { cleanup(); onChoice('sum'); }
-  btn1.addEventListener('click', asTwo);
-  btn2.addEventListener('click', asSum);
+  function asOne() { cleanup(); onChoice('stack'); }
+  function asTwo() { cleanup(); onChoice('grab'); }
+  btn1.addEventListener('click', asOne);
+  btn2.addEventListener('click', asTwo);
 }
 
 let draggedCard = null;
@@ -106,9 +106,8 @@ socket.on('wait', (data) => {
   });
 });
 
-socket.on('update table', (table) => {
-  // Now expects hand as second arg, but for legacy events just pass empty array
-  updateTableCards(table, []);
+socket.on('update table', (table, hand) => {
+  updateTableCards(table, hand);
 });
 
 // Show status in a modal (replace alert)
@@ -308,25 +307,43 @@ function updateTableCards(tableCards, playerHand = []) {
               return;
             }
           } else {
-            console.log('[ACTION] Sum > 14, must grab');
-            playCard({
-              type: "grab",
-              gameCode: currentGameCode,
-              playedCard: { card: draggedCard.card, suit: draggedCard.suit },
-              stackId: stackObj.id
-            });
-            draggedCard = null;
-            return;
+            if (numInHand > 1) {
+              console.log('[CHOICE] Sum > 14 and more than one in hand: prompt for grab or stack');
+              showStackChoiceModal('Grab this pile or continue stacking?', (choice) => {
+                console.log(`[MODAL CHOICE] User chose: ${choice}`);
+                playCard({
+                  type: choice === 'stack' ? "stack" : "grab",
+                  gameCode: currentGameCode,
+                  playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                  stackId: stackObj.id
+                });
+              }, "Stack", "Grab");
+              return;
+            } else {
+              // Only one in hand: auto grab
+              console.log('[ACTION] Sum > 14 and only one in hand: auto grab');
+              playCard({
+                type: "grab",
+                gameCode: currentGameCode,
+                playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                stackId: stackObj.id
+              });
+              draggedCard = null;
+              return;
+            }
           }
         }
 
+        console.log('draggedCard:', draggedCard);
+
         // If card value matches stack sum and player has more than one of that card, prompt for grab/stack
-        const stackSum = stackObj.cards.reduce((acc, num) => acc + num.card, 0);
+        const stackSum = stackObj.stackNumber;
         if (draggedCard.card === stackSum) {
           console.log(`[IF] Dragged card matches stack sum: stackSum=${stackSum}, draggedCard=${draggedCard.card}`);
           const numStackSumInHand = playerHand.filter(arr => arr[0].card === stackSum).length;
+          console.log(playerHand)
           console.log(`[COUNT] Number of stack sum in hand: ${numStackSumInHand}`);
-          if (numStackSumInHand >= 1) {
+          if (numStackSumInHand > 1) {
             console.log('[CHOICE] More than one matching card in hand: prompt for grab or stack');
             showStackChoiceModal('Grab this pile or just stack?', (choice) => {
               console.log(`[MODAL CHOICE] User chose: ${choice}`);
@@ -337,6 +354,7 @@ function updateTableCards(tableCards, playerHand = []) {
                   playedCard: { card: draggedCard.card, suit: draggedCard.suit },
                   stackId: stackObj.id
                 });
+                draggedCard = null;
               } else {
                 playCard({
                   type: "grab",
@@ -344,9 +362,9 @@ function updateTableCards(tableCards, playerHand = []) {
                   playedCard: { card: draggedCard.card, suit: draggedCard.suit },
                   stackId: stackObj.id
                 });
+                draggedCard = null;
               }
-              draggedCard = null;
-            });
+            }, "Stack", "Grab");
             return;
           }
           console.log('[ACTION] Only one matching card in hand: auto grab');
