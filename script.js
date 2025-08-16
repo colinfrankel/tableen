@@ -233,6 +233,7 @@ function updateTableCards(tableCards, playerHand = []) {
 
     stackDiv.addEventListener('drop', (e) => {
       e.preventDefault();
+      e.stopPropagation();
 
       if (!cardTarget && stackObj.cards.length === 0) {
         if (draggedCard) {

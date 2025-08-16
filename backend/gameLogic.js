@@ -29,9 +29,8 @@ function validateAndApplyAction(gameState, action, playerKey) {
     // Remove card from hand
     removeCardFromHand(gameState, playerKey, playedCard);
 
-    // If all cards in stack are same value as played card, just stack (do NOT sum)
-    const allSame = stack.cards.every(c => c.card === playedCard.card);
-    if (allSame) {
+    const matchesStackSum = playedCard.card === stack.stackNumber;
+    if (matchesStackSum) {
       stack.cards.push(playedCard);
       stack.stackNumber = playedCard.card;
       return { newState: gameState };
