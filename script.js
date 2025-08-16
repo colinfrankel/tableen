@@ -3,7 +3,7 @@ function showStackChoiceModal(message, onChoice, btn1Label = "Stack", btn2Label 
   const overlay = document.getElementById('modalOverlay');
   const msg = document.getElementById('modalMessage');
   const btns = document.querySelector('.modal-buttons');
-  msg.textContent = message || 'Stack as two cards or as a single sum?';
+  msg.innerHTML = message || 'Stack as two cards or as a single sum?';
   overlay.classList.remove('hidden');
   btns.innerHTML = `<button id="modalOption1">${btn1Label}</button><button id="modalOption2">${btn2Label}</button>`;
   const btn1 = document.getElementById('modalOption1');
@@ -24,7 +24,7 @@ function showStatusModal(msg) {
   const overlay = document.getElementById('modalOverlay');
   const msgDiv = document.getElementById('modalMessage');
   const btns = document.querySelector('.modal-buttons');
-  msgDiv.textContent = msg;
+  msgDiv.innerHTML = msg;
   overlay.classList.remove('hidden');
   btns.innerHTML = '<button id="modalOk">OK</button>';
   document.getElementById('modalOk').onclick = () => overlay.classList.add('hidden');
@@ -127,22 +127,69 @@ socket.on('status', (msg) => {
 });
 
 socket.on('round over', (data) => {
-  showStatusModal(data.message);
+  // Helper to format a card as a mini image
+function miniCardText(c) {
+  // Card value
+  let val = c.card;
+  if (val === 1 || val === 14) val = 'A';
+  if (val === 11) val = 'J';
+  if (val === 12) val = 'Q';
+  if (val === 13) val = 'K';
 
-  // Show collected cards for both players
-  let html = `<b>Your collected cards:</b><br>`;
+  // Suit emoji and color
+  let suit = '';
+  let color = '';
+  switch (c.suit) {
+    case 'hearts':
+      suit = '♥️'; color = 'red'; break;
+    case 'diamonds':
+      suit = '♦️'; color = 'red'; break;
+    case 'clubs':
+      suit = '♣️'; color = 'black'; break;
+    case 'spades':
+      suit = '♠️'; color = 'black'; break;
+  }
+  return `<span class="mini-card" style="display:inline-block;min-width:22px;color:${color};font-weight:bold;font-size:1.1em;text-align:center;">${val}${suit}</span>`;
+}
+
+  function summarize(cards) {
+    // Separate aces (card 1 or 14)
+    const aces = cards.filter(c => c.card === 1 || c.card === 14);
+    // Spades (not ace or 2)
+    const spades = cards.filter(c => c.suit === 'spades' && c.card !== 1 && c.card !== 2);
+    // 2 of spades
+    const twoSpades = cards.filter(c => c.card === 2 && c.suit === 'spades');
+    // 10 of diamonds
+    const tenDiamonds = cards.filter(c => c.card === 10 && c.suit === 'diamonds');
+    // Other cards
+    const others = cards.filter(c =>
+      c.card !== 1 &&
+      c.card !== 14 &&
+      !(c.card === 2 && c.suit === 'spades') &&
+      !(c.card === 10 && c.suit === 'diamonds') &&
+      !(c.suit === 'spades' && c.card !== 1 && c.card !== 2)
+    );
+
+    let html = '';
+    if (aces.length) html += `<p>Aces:</p> ${aces.map(miniCardText).join(' ')}<br>`;
+    if (spades.length) html += `<p>Spades:</p> ${spades.map(miniCardText).join(' ')}<br>`;
+    if (twoSpades.length) html += `<p>2 of Spades:</p> ${twoSpades.map(miniCardText).join(' ')}<br>`;
+    if (tenDiamonds.length) html += `<p>10 of Diamonds:</p> ${tenDiamonds.map(miniCardText).join(' ')}<br>`;
+    if (others.length) html += `<p>Other cards:</p> ${others.map(miniCardText).join(' ')}<br>`;
+    html += `<p>Total cards:</p> ${cards.length}<br>`;
+    return html;
+  }
+
   // Determine which player you are
   const myKey = socket.id === data.playerIds?.playerOne ? 'playerOne' : 'playerTwo';
-  const myCards = data.collected[myKey] || [];
-  html += myCards.map(c => `${c.card}${c.suit[0].toUpperCase()}`).join(', ');
-
-  // Optionally show opponent's cards
-  html += `<br><b>Opponent's collected cards:</b><br>`;
   const oppKey = myKey === 'playerOne' ? 'playerTwo' : 'playerOne';
+  const myCards = data.collected[myKey] || [];
   const oppCards = data.collected[oppKey] || [];
-  html += oppCards.map(c => `${c.card}${c.suit[0].toUpperCase()}`).join(', ');
 
-  console.log(html)
+  let html = `<b>Your collected cards:</b><br>${summarize(myCards)}<br>`;
+  html += `<b>Opponent's collected cards:</b><br>${summarize(oppCards)}<br>`;
+
+  showStatusModal(`${data.message}<br><br>${html}`);
   updateDebugInfo({ extra: html });
 });
 
@@ -278,16 +325,16 @@ function updateTableCards(tableCards, playerHand = []) {
             if (numInHand === 1) {
               if (hasSumCard) {
                 showStackChoiceModal('Grab this pile or stack as sum?', (choice) => {
+                  console.log(`Player chose to ${choice} the stack`);
                   let playedCardValue = draggedCard.card;
                   if (choice === 'stack' && draggedCard.card === 14) {
                     playedCardValue = 1;
                   }
                   playCard({
-                    type: choice === 'sum' ? "stack" : "grab",
+                    type: choice === 'stack' ? "stack" : "grab",
                     gameCode: currentGameCode,
                     playedCard: { card: playedCardValue, suit: draggedCard.suit },
                     stackId: stackObj.id,
-                    stackAsSum: choice === 'sum'
                   });
                   draggedCard = null;
                 });
@@ -304,12 +351,13 @@ function updateTableCards(tableCards, playerHand = []) {
               }
             } else if (numInHand > 1) {
               showStackChoiceModal('Grab this pile or continue stacking?', (choice) => {
+                console.log(`Player chose to ${choice} the stack`);
                 let playedCardValue = draggedCard.card;
                 if (choice === 'stack' && draggedCard.card === 14) {
                   playedCardValue = 1;
                 }
                 playCard({
-                  type: choice === 'sum' ? "stack" : "grab",
+                  type: choice === 'stack' ? "stack" : "grab",
                   gameCode: currentGameCode,
                   playedCard: { card: playedCardValue, suit: draggedCard.suit },
                   stackId: stackObj.id,
@@ -331,6 +379,7 @@ function updateTableCards(tableCards, playerHand = []) {
           } else {
             if (numInHand > 1) {
               showStackChoiceModal('Grab this pile or continue stacking?', (choice) => {
+                console.log(`Player chose to ${choice} the stack`);
                 let playedCardValue = draggedCard.card;
                 if (choice === 'stack' && draggedCard.card === 14) {
                   playedCardValue = 1;
@@ -363,6 +412,7 @@ function updateTableCards(tableCards, playerHand = []) {
           const numStackSumInHand = playerHand.filter(arr => arr[0].card === stackSum).length;
           if (numStackSumInHand > 1) {
             showStackChoiceModal('Grab this pile or just stack?', (choice) => {
+              console.log(`Player chose to ${choice} the stack`);
               if (choice === 'stack') {
                 let playedCardValue = draggedCard.card;
                 if (draggedCard.card === 14) {
@@ -459,6 +509,7 @@ function updateTableCards(tableCards, playerHand = []) {
         if (sum <= 14) {
           if (hasSumCard && hasStackCard) {
             showStackChoiceModal('Combine as sum or keep as stack?', (choice) => {
+              console.log(`Player chose to ${choice} the stack`);
               playCard({
                 type: "boardstack",
                 gameCode: currentGameCode,

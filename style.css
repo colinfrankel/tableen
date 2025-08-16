@@ -162,3 +162,10 @@ header {
   pointer-events: none;
   opacity: 0.92;
 }
+
+.mini-card {
+	border: 2px solid black;
+	padding: 3px;
+	border-radius: 10px;
+	margin: 2px 0px;
+}
