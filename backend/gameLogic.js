@@ -34,7 +34,9 @@ function validateAndApplyAction(gameState, action, playerKey) {
 
     // If stacking as sum
     if (action.stackAsSum) {
-      const sum = stack.cards.reduce((acc, c) => acc + c.card, 0) + playedCard.card;
+      // If played card is an ace (14), treat it as 1 for sum calculation
+      const playedCardValueForSum = playedCard.card === 14 ? 1 : playedCard.card;
+      const sum = stack.cards.reduce((acc, c) => acc + c.card, 0) + playedCardValueForSum;
       if (sum > 14) return { error: 'Cannot create a stack above 14.' };
       stack.cards.push(playedCard); // Keep all cards for UI
       stack.stackNumber = sum;      // Show sum as stackNumber

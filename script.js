@@ -19,6 +19,17 @@ function showStackChoiceModal(message, onChoice, btn1Label = "Stack", btn2Label 
   btn2.addEventListener('click', asTwo);
 }
 
+// Show status in a modal (replace alert)
+function showStatusModal(msg) {
+  const overlay = document.getElementById('modalOverlay');
+  const msgDiv = document.getElementById('modalMessage');
+  const btns = document.querySelector('.modal-buttons');
+  msgDiv.textContent = msg;
+  overlay.classList.remove('hidden');
+  btns.innerHTML = '<button id="modalOk">OK</button>';
+  document.getElementById('modalOk').onclick = () => overlay.classList.add('hidden');
+}
+
 let draggedCard = null;
 let draggedTableCard = null;
 let currentGameCode = null;
@@ -110,20 +121,29 @@ socket.on('update table', (table, hand) => {
   updateTableCards(table, hand);
 });
 
-// Show status in a modal (replace alert)
-function showStatusModal(msg) {
-  const overlay = document.getElementById('modalOverlay');
-  const msgDiv = document.getElementById('modalMessage');
-  const btns = document.querySelector('.modal-buttons');
-  msgDiv.textContent = msg;
-  overlay.classList.remove('hidden');
-  btns.innerHTML = '<button id="modalOk">OK</button>';
-  document.getElementById('modalOk').onclick = () => overlay.classList.add('hidden');
-}
-
 socket.on('status', (msg) => {
   showStatusModal(msg);
   updateDebugInfo({ extra: msg });
+});
+
+socket.on('round over', (data) => {
+  showStatusModal(data.message);
+
+  // Show collected cards for both players
+  let html = `<b>Your collected cards:</b><br>`;
+  // Determine which player you are
+  const myKey = socket.id === data.playerIds?.playerOne ? 'playerOne' : 'playerTwo';
+  const myCards = data.collected[myKey] || [];
+  html += myCards.map(c => `${c.card}${c.suit[0].toUpperCase()}`).join(', ');
+
+  // Optionally show opponent's cards
+  html += `<br><b>Opponent's collected cards:</b><br>`;
+  const oppKey = myKey === 'playerOne' ? 'playerTwo' : 'playerOne';
+  const oppCards = data.collected[oppKey] || [];
+  html += oppCards.map(c => `${c.card}${c.suit[0].toUpperCase()}`).join(', ');
+
+  console.log(html)
+  updateDebugInfo({ extra: html });
 });
 
 socket.on('opponent disconnected', (data) => {

@@ -146,9 +146,13 @@ io.on('connection', (socket) => {
           game.points.playerOne += pointsA;
           game.points.playerTwo += pointsB;
 
-          io.to(gameCode).emit('status',
-            `Round over!\nPlayer 1: ${game.points.playerOne} points\nPlayer 2: ${game.points.playerTwo} points`
-          );
+          io.to(gameCode).emit('round over', {
+            message: `Round over!\nPlayer 1: ${game.points.playerOne} points\nPlayer 2: ${game.points.playerTwo} points`,
+            collected: {
+              playerOne: game.collected.playerOne,
+              playerTwo: game.collected.playerTwo
+            }
+          });
 
           if (game.points.playerOne >= 21 || game.points.playerTwo >= 21) {
             let winner = '';
