@@ -1,8 +1,8 @@
 // Centralized game rules and state transitions for Tableen
 
-let nextStackId = 1;
-function generateStackId() {
-  return (nextStackId++).toString();
+function generateStackId(game) {
+  if (!game.nextStackId) game.nextStackId = 1;
+  return (game.nextStackId++).toString();
 }
 
 function resolveStackIndex(gameState, id) {
@@ -11,13 +11,16 @@ function resolveStackIndex(gameState, id) {
 
 function removeCardFromHand(gameState, playerKey, card) {
   const hand = gameState.playerHands[playerKey];
-  const idx = hand.findIndex(arr => arr[0].card === card.card && arr[0].suit === card.suit);
+  const idx = hand.findIndex(arr => {
+    const handCard = arr[0];
+    // Treat ace in hand (card: 1) as matching played ace (card: 14)
+    const isAceMatch = (handCard.card === 1 && card.card === 14) || (handCard.card === 14 && card.card === 1);
+    return (handCard.card === card.card && handCard.suit === card.suit) || (isAceMatch && handCard.suit === card.suit);
+  });
   if (idx !== -1) hand.splice(idx, 1);
 }
 
 function validateAndApplyAction(gameState, action, playerKey) {
-  console.log('Received action:', action);
-
   // STACK
   if (action.type === 'stack') {
     const stackIndex = action.stackId ? resolveStackIndex(gameState, action.stackId) : -1;
@@ -29,19 +32,20 @@ function validateAndApplyAction(gameState, action, playerKey) {
     // Remove card from hand
     removeCardFromHand(gameState, playerKey, playedCard);
 
-    const matchesStackSum = playedCard.card === stack.stackNumber;
-    if (matchesStackSum) {
-      stack.cards.push(playedCard);
-      stack.stackNumber = playedCard.card;
-      return { newState: gameState };
-    }
-
     // If stacking as sum
     if (action.stackAsSum) {
       const sum = stack.cards.reduce((acc, c) => acc + c.card, 0) + playedCard.card;
       if (sum > 14) return { error: 'Cannot create a stack above 14.' };
       stack.cards.push(playedCard); // Keep all cards for UI
       stack.stackNumber = sum;      // Show sum as stackNumber
+      return { newState: gameState };
+    }
+
+    // If played card matches stack sum, allow stacking (do NOT sum or check sum limit)
+    const matchesStackSum = playedCard.card === stack.stackNumber;
+    if (matchesStackSum) {
+      stack.cards.push(playedCard);
+      // stack.stackNumber stays the same!
       return { newState: gameState };
     }
 
@@ -55,14 +59,19 @@ function validateAndApplyAction(gameState, action, playerKey) {
 
   // NORMAL (play a card as a new stack)
   if (action.type === 'normal') {
-    const playedCard = action.playedCard;
+    let playedCard = action.playedCard;
     if (!playedCard) return { error: 'No card played.' };
 
     // Remove card from hand
     removeCardFromHand(gameState, playerKey, playedCard);
 
+    // ACE WEIRDNESS: If played card is an ace (14), convert to 1 for the board
+    if (playedCard.card === 14) {
+      playedCard = { ...playedCard, card: 1 };
+    }
+
     gameState.tableCards.push({
-      id: generateStackId(),
+      id: generateStackId(gameState),
       cards: [playedCard],
       stackNumber: playedCard.card
     });

@@ -12,36 +12,17 @@ const io = new Server(server, {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const fullDeck = [
-  [{ card: 1, suit: 'clubs', stackSum: 1 }], [{ card: 2, suit: 'clubs', stackSum: 2 }],
-  [{ card: 3, suit: 'clubs', stackSum: 3 }], [{ card: 4, suit: 'clubs', stackSum: 4 }],
-  [{ card: 5, suit: 'clubs', stackSum: 5 }], [{ card: 6, suit: 'clubs', stackSum: 6 }],
-  [{ card: 7, suit: 'clubs', stackSum: 7 }], [{ card: 8, suit: 'clubs', stackSum: 8 }],
-  [{ card: 9, suit: 'clubs', stackSum: 9 }], [{ card: 10, suit: 'clubs', stackSum: 10 }],
-  [{ card: 11, suit: 'clubs', stackSum: 11 }], [{ card: 12, suit: 'clubs', stackSum: 12 }],
-  [{ card: 13, suit: 'clubs', stackSum: 13 }],
-  [{ card: 1, suit: 'diamonds', stackSum: 1 }], [{ card: 2, suit: 'diamonds', stackSum: 2 }],
-  [{ card: 3, suit: 'diamonds', stackSum: 3 }], [{ card: 4, suit: 'diamonds', stackSum: 4 }],
-  [{ card: 5, suit: 'diamonds', stackSum: 5 }], [{ card: 6, suit: 'diamonds', stackSum: 6 }],
-  [{ card: 7, suit: 'diamonds', stackSum: 7 }], [{ card: 8, suit: 'diamonds', stackSum: 8 }],
-  [{ card: 9, suit: 'diamonds', stackSum: 9 }], [{ card: 10, suit: 'diamonds', stackSum: 10 }],
-  [{ card: 11, suit: 'diamonds', stackSum: 11 }], [{ card: 12, suit: 'diamonds', stackSum: 12 }],
-  [{ card: 13, suit: 'diamonds', stackSum: 13 }],
-  [{ card: 1, suit: 'hearts', stackSum: 1 }], [{ card: 2, suit: 'hearts', stackSum: 2 }],
-  [{ card: 3, suit: 'hearts', stackSum: 3 }], [{ card: 4, suit: 'hearts', stackSum: 4 }],
-  [{ card: 5, suit: 'hearts', stackSum: 5 }], [{ card: 6, suit: 'hearts', stackSum: 6 }],
-  [{ card: 7, suit: 'hearts', stackSum: 7 }], [{ card: 8, suit: 'hearts', stackSum: 8 }],
-  [{ card: 9, suit: 'hearts', stackSum: 9 }], [{ card: 10, suit: 'hearts', stackSum: 10 }],
-  [{ card: 11, suit: 'hearts', stackSum: 11 }], [{ card: 12, suit: 'hearts', stackSum: 12 }],
-  [{ card: 13, suit: 'hearts', stackSum: 13 }],
-  [{ card: 1, suit: 'spades', stackSum: 1 }], [{ card: 2, suit: 'spades', stackSum: 2 }],
-  [{ card: 3, suit: 'spades', stackSum: 3 }], [{ card: 4, suit: 'spades', stackSum: 4 }],
-  [{ card: 5, suit: 'spades', stackSum: 5 }], [{ card: 6, suit: 'spades', stackSum: 6 }],
-  [{ card: 7, suit: 'spades', stackSum: 7 }], [{ card: 8, suit: 'spades', stackSum: 8 }],
-  [{ card: 9, suit: 'spades', stackSum: 9 }], [{ card: 10, suit: 'spades', stackSum: 10 }],
-  [{ card: 11, suit: 'spades', stackSum: 11 }], [{ card: 12, suit: 'spades', stackSum: 12 }],
-  [{ card: 13, suit: 'spades', stackSum: 13 }],
-];
+// Deck generator function (returns a fresh deck array)
+function getFullDeck() {
+  const suits = ['clubs', 'diamonds', 'hearts', 'spades'];
+  const deck = [];
+  for (const suit of suits) {
+    for (let card = 1; card <= 13; card++) {
+      deck.push([{ card, suit, stackSum: card }]);
+    }
+  }
+  return deck;
+}
 
 function shuffle(array) {
   const a = array.slice();
@@ -66,7 +47,7 @@ io.on('connection', (socket) => {
     let code;
     do { code = makeCode(5); } while (games[code]);
 
-    const deck = shuffle(fullDeck);
+    const deck = shuffle(getFullDeck());
     games[code] = {
       deck,
       tableCards: [],
@@ -74,7 +55,8 @@ io.on('connection', (socket) => {
       currentPlayer: null,
       playerIds: { playerOne: socket.id, playerTwo: null },
       collected: { playerOne: [], playerTwo: [] },
-      points: { playerOne: 0, playerTwo: 0 }
+      points: { playerOne: 0, playerTwo: 0 },
+      nextStackId: 1 // <-- game-specific stack ID
     };
 
     socket.join(code);
@@ -101,13 +83,13 @@ io.on('connection', (socket) => {
     socketMap[socket.id] = { gameCode: code, playerKey: 'playerTwo' };
 
     if (game.deck.length < 12) {
-      game.deck = shuffle(fullDeck);
+      game.deck = shuffle(getFullDeck());
     }
 
     game.playerHands.playerOne = game.deck.slice(0, 4);
     game.playerHands.playerTwo = game.deck.slice(4, 8);
     game.tableCards = game.deck.slice(8, 12).map(cardArr => ({
-      id: generateStackId(),
+      id: generateStackId(game),
       cards: [...cardArr],
       stackNumber: cardArr[0].card
     }));
@@ -179,17 +161,18 @@ io.on('connection', (socket) => {
           }
 
           // Otherwise, shuffle and start new round
-          game.deck = shuffle(fullDeck);
+          game.deck = shuffle(getFullDeck());
           game.playerHands.playerOne = game.deck.slice(0, 4);
           game.playerHands.playerTwo = game.deck.slice(4, 8);
           game.tableCards = game.deck.slice(8, 12).map(cardArr => ({
-            id: generateStackId(),
+            id: generateStackId(game),
             cards: [...cardArr],
             stackNumber: cardArr[0].card
           }));
           game.deck.splice(0, 12);
           game.collected.playerOne = [];
           game.collected.playerTwo = [];
+          game.nextStackId = 1;
 
           game.currentPlayer = game.playerIds.playerOne;
           io.to(game.playerIds.playerOne).emit('your turn', {
@@ -238,7 +221,6 @@ io.on('connection', (socket) => {
       }
       io.to(game.playerIds.playerOne).emit('update table', game.tableCards, game.playerHands.playerOne);
       io.to(game.playerIds.playerTwo).emit('update table', game.tableCards, game.playerHands.playerTwo);
-
     }
   });
 

@@ -14,7 +14,7 @@ function showStackChoiceModal(message, onChoice, btn1Label = "Stack", btn2Label 
     btn2.removeEventListener('click', asTwo);
   }
   function asOne() { cleanup(); onChoice('stack'); }
-  function asTwo() { cleanup(); onChoice('grab'); }
+  function asTwo() { cleanup(); onChoice('sum'); }
   btn1.addEventListener('click', asOne);
   btn2.addEventListener('click', asTwo);
 }
@@ -162,13 +162,14 @@ function updateGameUI(data, isYourTurn) {
   // player's hand (draggable)
   data.hand.forEach(cardArray => {
     const card = cardArray[0];
+    const displayCardValue = card.card === 1 ? 14 : card.card;
     const cardElement = document.createElement('img');
     cardElement.src = `./cards/${card.suit}/${card.card}.svg`;
     cardElement.classList.add('card');
     cardElement.setAttribute('draggable', true);
 
     cardElement.addEventListener('dragstart', function (e) {
-      draggedCard = { card: card.card, suit: card.suit, stackSum: card.stackSum };
+      draggedCard = { card: displayCardValue, suit: card.suit, stackSum: card.stackSum };
     });
 
     document.getElementById('cards').appendChild(cardElement);
@@ -442,7 +443,7 @@ function updateTableCards(tableCards, playerHand = []) {
               stackAsSum: choice === 'sum'
             });
             draggedTableCard = null;
-          });
+          }, "Stack", "Sum");
           return;
         }
         // If the sum of both stacks matches, just merge (do NOT send stackAsSum)
