@@ -103,6 +103,10 @@ function validateAndApplyAction(gameState, action, playerKey) {
     // Remove the stack from the table and add to player's collected pile
     const grabbedStack = gameState.tableCards.splice(stackIndex, 1)[0];
     if (!gameState.collected[playerKey]) gameState.collected[playerKey] = [];
+    // Add both the played card and the grabbed stack's cards
+    if (playedCard) {
+      gameState.collected[playerKey].push(playedCard);
+    }
     gameState.collected[playerKey].push(...grabbedStack.cards);
 
     return { newState: gameState };
@@ -166,7 +170,7 @@ function validateAndApplyAction(gameState, action, playerKey) {
 // Scoring function
 function calculatePoints(collectedA, collectedB) {
   function cardCount(cards) { return cards.length; }
-  function countAces(cards) { return cards.filter(c => c.card === 1).length; }
+  function countAces(cards) { return cards.filter(c => c.card === 1 || c.card === 14).length; }
   function hasTwoSpades(cards) { return cards.some(c => c.card === 2 && c.suit === 'spades') ? 1 : 0; }
   function hasTenDiamonds(cards) { return cards.some(c => c.card === 10 && c.suit === 'diamonds') ? 2 : 0; }
   function countSpades(cards) { return cards.filter(c => c.suit === 'spades').length; }

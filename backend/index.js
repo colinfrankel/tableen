@@ -56,7 +56,8 @@ io.on('connection', (socket) => {
       playerIds: { playerOne: socket.id, playerTwo: null },
       collected: { playerOne: [], playerTwo: [] },
       points: { playerOne: 0, playerTwo: 0 },
-      nextStackId: 1 // <-- game-specific stack ID
+      nextStackId: 1, // game-specific stack ID
+      lastGrabber: null // track last grabber for end-of-round collection
     };
 
     socket.join(code);
@@ -128,6 +129,12 @@ io.on('connection', (socket) => {
     }
     const playerKey = game.playerIds.playerOne === socket.id ? 'playerOne' : 'playerTwo';
     const { newState, prompt, error } = validateAndApplyAction(game, payload, playerKey);
+
+    // Track last grabber for end-of-round collection
+    if (payload.type === 'grab') {
+      game.lastGrabber = playerKey;
+    }
+
     if (error) return socket.emit('status', error);
     if (prompt) {
       return socket.emit('prompt', prompt);
@@ -141,6 +148,13 @@ io.on('connection', (socket) => {
           game.playerHands.playerOne = game.deck.splice(0, 4);
           game.playerHands.playerTwo = game.deck.splice(0, 4);
         } else {
+          // --- ROUND OVER: Award remaining table cards to last grabber ---
+          if (game.lastGrabber && game.tableCards.length > 0) {
+            const remainingCards = game.tableCards.flatMap(stack => stack.cards);
+            game.collected[game.lastGrabber].push(...remainingCards);
+            game.tableCards = [];
+          }
+
           // --- ROUND OVER: Calculate points ---
           const { pointsA, pointsB } = calculatePoints(game.collected.playerOne, game.collected.playerTwo);
           game.points.playerOne += pointsA;
@@ -177,6 +191,7 @@ io.on('connection', (socket) => {
           game.collected.playerOne = [];
           game.collected.playerTwo = [];
           game.nextStackId = 1;
+          game.lastGrabber = null;
 
           game.currentPlayer = game.playerIds.playerOne;
           io.to(game.playerIds.playerOne).emit('your turn', {
