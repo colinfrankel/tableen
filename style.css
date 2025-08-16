@@ -46,7 +46,7 @@ header {
   width: 200px;
 }
 
-.createContainer, .joinContainer {
+#createContainer, #joinContainer {
   border: 1px solid #ddd;
   border-radius: 8px;
   padding: 1em;
@@ -54,7 +54,7 @@ header {
   width: 300px;
 }
 
-.joinContainer {
+#joinContainer {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -145,4 +145,20 @@ header {
 }
 .modal-buttons button:hover {
   background: #1761c7;
+}
+
+.debug-info {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  background: rgba(10, 61, 145, 0.95);
+  color: #fff;
+  font-size: 0.95em;
+  padding: 10px 16px;
+  border-top-right-radius: 10px;
+  z-index: 9999;
+  min-width: 220px;
+  max-width: 350px;
+  pointer-events: none;
+  opacity: 0.92;
 }

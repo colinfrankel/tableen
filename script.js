@@ -33,7 +33,7 @@ const gameCodeSpan = document.getElementById('gameCode');
 const lobbyStatus = document.getElementById('lobbyStatus');
 
 createBtn.addEventListener('click', () => {
-  socket.emit('create game', (res) => {});
+  socket.emit('create game', (res) => { });
 });
 
 joinBtn.addEventListener('click', () => {
@@ -58,31 +58,57 @@ function showGameCode(code) {
 
 // socket events
 socket.on('connect', () => {
-  console.log('Connected to server');
+  updateDebugInfo({ extra: `Connected to Server!` });
 });
 
 socket.on('game created', ({ code }) => {
   currentGameCode = code;
   showGameCode(code);
   lobbyStatus.innerText = `Game ${code} created — waiting for other player...`;
+  document.getElementById('gameStartOptions').classList.add('hidden');
+  updateDebugInfo({ gameCode: currentGameCode, socketId: socket.id });
+
 });
 
 socket.on('joined', (data) => {
-  lobbyStatus.innerText = `Game ${data.code} started!`;
+  document.getElementById('lobby').classList.add('hidden');
+  updateDebugInfo({ gameCode: currentGameCode, socketId: socket.id });
+
 });
 
 socket.on('your turn', (data) => {
   currentGameCode = data.gameCode || currentGameCode;
   updateGameUI(data, true);
+  updateDebugInfo({
+    gameCode: currentGameCode,
+    socketId: socket.id,
+    extra: `
+      <b>Deck Size:</b> ${data.deck ? data.deck.length : '—'}<br>
+      <b>Your Hand:</b> ${data.hand.map(arr => arr[0].card + arr[0].suit[0].toUpperCase()).join(', ')}<br>
+      <b>Opponent Cards:</b> ${data.opponentCards}<br>
+      <b>Table:</b> ${data.table.map(s => `[${s.stackNumber}: ${s.cards.map(c => c.card + c.suit[0].toUpperCase()).join(', ')}]`).join(' ')}<br>
+    `
+  });
 });
 
 socket.on('wait', (data) => {
   currentGameCode = data.gameCode || currentGameCode;
   updateGameUI(data, false);
+  updateDebugInfo({
+    gameCode: currentGameCode,
+    socketId: socket.id,
+    extra: `
+      <b>Deck Size:</b> ${data.deck ? data.deck.length : '—'}<br>
+      <b>Your Hand:</b> ${data.hand.map(arr => arr[0].card + arr[0].suit[0].toUpperCase()).join(', ')}<br>
+      <b>Opponent Cards:</b> ${data.opponentCards}<br>
+      <b>Table:</b> ${data.table.map(s => `[${s.stackNumber}: ${s.cards.map(c => c.card + c.suit[0].toUpperCase()).join(', ')}]`).join(' ')}<br>
+    `
+  });
 });
 
 socket.on('update table', (table) => {
-  updateTableCards(table);
+  // Now expects hand as second arg, but for legacy events just pass empty array
+  updateTableCards(table, []);
 });
 
 // Show status in a modal (replace alert)
@@ -98,12 +124,11 @@ function showStatusModal(msg) {
 
 socket.on('status', (msg) => {
   showStatusModal(msg);
-  console.log('Status:', msg);
+  updateDebugInfo({ extra: msg });
 });
 
 socket.on('opponent disconnected', (data) => {
-  alert(data.message || 'Opponent disconnected. The game ended.');
-  document.getElementById('title').innerText = 'Opponent disconnected';
+  updateDebugInfo({ extra: "Opponent disconnected!" });
 });
 
 // drag/drop base handlers
@@ -124,7 +149,6 @@ document.body.addEventListener('drop', (e) => {
 
 // Update UI with player's hand + table
 function updateGameUI(data, isYourTurn) {
-  document.getElementById('title').innerHTML = '';
   document.getElementById('cards').innerHTML = '';
   document.getElementById('opponentCards').style.display = 'flex';
   document.getElementById('opponentCards').innerHTML = '';
@@ -151,7 +175,7 @@ function updateGameUI(data, isYourTurn) {
     document.getElementById('cards').appendChild(cardElement);
   });
 
-  updateTableCards(data.table);
+  updateTableCards(data.table, data.hand);
 
   const turnStatus = document.getElementById('turnStatus');
   if (isYourTurn) {
@@ -164,7 +188,7 @@ function updateGameUI(data, isYourTurn) {
 }
 
 // update table stacks rendering
-function updateTableCards(tableCards) {
+function updateTableCards(tableCards, playerHand = []) {
   window.lastTableState = tableCards;
   const tableCardsDiv = document.getElementById('tableCards');
   tableCardsDiv.innerHTML = '';
@@ -188,13 +212,12 @@ function updateTableCards(tableCards) {
       stackDiv.appendChild(cardElement);
     });
 
-    // Always show stack number (now explicit)
+    // Always show stack number
     const stackNumberDiv = document.createElement('div');
     stackNumberDiv.classList.add('stack-number');
     stackNumberDiv.innerText = stackObj.stackNumber;
     stackDiv.appendChild(stackNumberDiv);
 
-    // track the last hovered card inside stack for drop target
     let cardTarget = null;
     stackDiv.addEventListener('dragover', (e) => {
       e.preventDefault();
@@ -211,8 +234,10 @@ function updateTableCards(tableCards) {
 
     stackDiv.addEventListener('drop', (e) => {
       e.preventDefault();
+
       if (!cardTarget && stackObj.cards.length === 0) {
         if (draggedCard) {
+          console.log('Drop on empty stack: playing card as new pile');
           playCard({
             type: "normal",
             gameCode: currentGameCode,
@@ -223,61 +248,159 @@ function updateTableCards(tableCards) {
         return;
       }
 
-      // If dragging from hand, stack onto table
       if (draggedCard) {
-        // If stacking two identical cards (single card stack), prompt for sum/stack
+        // Handle stacking two identical cards
         if (stackObj.cards.length === 1 && stackObj.cards[0].card === draggedCard.card) {
           const sum = stackObj.cards[0].card + draggedCard.card;
+          const numInHand = playerHand.filter(arr => arr[0].card === draggedCard.card).length;
+          const hasSumCard = playerHand.some(arr => arr[0].card === sum);
+          console.log(`[IF] Stacking two identical cards: stack card=${stackObj.cards[0].card}, dragged card=${draggedCard.card}, sum=${sum}, numInHand=${numInHand}, hasSumCard=${hasSumCard}`);
           if (sum <= 14) {
-            showStackChoiceModal('Stack as two cards or as a single sum?', (choice) => {
-              playCard({
-                type: "stack",
-                gameCode: currentGameCode,
-                playedCard: { card: draggedCard.card, suit: draggedCard.suit },
-                stackId: stackObj.id,
-                stackAsSum: choice === 'sum'
+            if (numInHand === 1) {
+              if (hasSumCard) {
+                console.log('[CHOICE] Only one in hand and CAN sum: prompt for grab or sum');
+                showStackChoiceModal('Grab this pile or stack as sum?', (choice) => {
+                  console.log(`[MODAL CHOICE] User chose: ${choice}`);
+                  playCard({
+                    type: choice === 'sum' ? "stack" : "grab",
+                    gameCode: currentGameCode,
+                    playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                    stackId: stackObj.id,
+                    stackAsSum: choice === 'sum'
+                  });
+                  draggedCard = null;
+                });
+                return;
+              } else {
+                console.log('[ACTION] Only one in hand and CAN\'T sum: just grab');
+                playCard({
+                  type: "grab",
+                  gameCode: currentGameCode,
+                  playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                  stackId: stackObj.id
+                });
+                draggedCard = null;
+                return;
+              }
+            } else if (numInHand > 1) {
+              console.log('[CHOICE] More than one in hand: always prompt, even if can\'t sum');
+              showStackChoiceModal('Grab this pile or continue stacking?', (choice) => {
+                console.log(`[MODAL CHOICE] User chose: ${choice}`);
+                playCard({
+                  type: choice === 'stack' ? "stack" : "grab",
+                  gameCode: currentGameCode,
+                  playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                  stackId: stackObj.id,
+                  stackAsSum: choice === 'sum'
+                });
+                draggedCard = null;
               });
-              draggedCard = null;
-            });
-            return;
-          }
-        }
-        // If card value matches stack sum, prompt for grab/stack
-        const stackSum = stackObj.cards.reduce((acc, num) => acc + num.card, 0);
-        if (draggedCard.card === stackSum) {
-          showStackChoiceModal('Grab this pile or just stack?', (choice) => {
-            if (choice === 'stack') {
-              playCard({
-                type: "stack",
-                gameCode: currentGameCode,
-                playedCard: { card: draggedCard.card, suit: draggedCard.suit },
-                stackId: stackObj.id
-              });
+              return;
             } else {
+              console.log('[ACTION] Only one in hand and can\'t sum: just grab');
               playCard({
                 type: "grab",
                 gameCode: currentGameCode,
                 playedCard: { card: draggedCard.card, suit: draggedCard.suit },
                 stackId: stackObj.id
               });
+              draggedCard = null;
+              return;
             }
+          } else {
+            console.log('[ACTION] Sum > 14, must grab');
+            playCard({
+              type: "grab",
+              gameCode: currentGameCode,
+              playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+              stackId: stackObj.id
+            });
             draggedCard = null;
+            return;
+          }
+        }
+
+        // If card value matches stack sum and player has more than one of that card, prompt for grab/stack
+        const stackSum = stackObj.cards.reduce((acc, num) => acc + num.card, 0);
+        if (draggedCard.card === stackSum) {
+          console.log(`[IF] Dragged card matches stack sum: stackSum=${stackSum}, draggedCard=${draggedCard.card}`);
+          const numStackSumInHand = playerHand.filter(arr => arr[0].card === stackSum).length;
+          console.log(`[COUNT] Number of stack sum in hand: ${numStackSumInHand}`);
+          if (numStackSumInHand >= 1) {
+            console.log('[CHOICE] More than one matching card in hand: prompt for grab or stack');
+            showStackChoiceModal('Grab this pile or just stack?', (choice) => {
+              console.log(`[MODAL CHOICE] User chose: ${choice}`);
+              if (choice === 'stack') {
+                playCard({
+                  type: "stack",
+                  gameCode: currentGameCode,
+                  playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                  stackId: stackObj.id
+                });
+              } else {
+                playCard({
+                  type: "grab",
+                  gameCode: currentGameCode,
+                  playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                  stackId: stackObj.id
+                });
+              }
+              draggedCard = null;
+            });
+            return;
+          }
+          console.log('[ACTION] Only one matching card in hand: auto grab');
+          playCard({
+            type: "grab",
+            gameCode: currentGameCode,
+            playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+            stackId: stackObj.id
           });
+          draggedCard = null;
           return;
         }
-        // Otherwise, just stack
-        playCard({
-          type: "stack",
-          gameCode: currentGameCode,
-          playedCard: { card: draggedCard.card, suit: draggedCard.suit },
-          stackId: stackObj.id
-        });
-        draggedCard = null;
+
+        // Otherwise, just stack (do NOT send stackAsSum if sum > 14 or if just matching stack sum)
+        const sum = stackObj.cards.length === 1 ? stackObj.cards[0].card + draggedCard.card : null;
+        if (sum !== null && sum > 14) {
+          console.log('[ACTION] Sum > 14, just stack (not sum)');
+          playCard({
+            type: "stack",
+            gameCode: currentGameCode,
+            playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+            stackId: stackObj.id
+          });
+          draggedCard = null;
+          return;
+        } else if (sum !== null && sum <= 14) {
+          console.log('[ACTION] Sum <= 14, send stackAsSum: true');
+          playCard({
+            type: "stack",
+            gameCode: currentGameCode,
+            playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+            stackId: stackObj.id,
+            stackAsSum: true
+          });
+          draggedCard = null;
+          return;
+        } else {
+          console.log('[ACTION] All other cases, just stack');
+          playCard({
+            type: "stack",
+            gameCode: currentGameCode,
+            playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+            stackId: stackObj.id
+          });
+          draggedCard = null;
+          return;
+        }
       } else if (draggedTableCard) {
-        // Boardstack (move a whole table-stack onto another) -- use stack IDs!
+        console.log('[IF] Dragging table card:', draggedTableCard);
+        // Boardstack (move a whole table-stack onto another)
         const fromStack = window.lastTableState.find(s => s.id === draggedTableCard.stackId);
         const toStack = stackObj;
         if (!fromStack || !toStack) {
+          console.log('[ERROR] Invalid stacks for boardstack.');
           showStatusModal('Error: Invalid stacks for boardstack.');
           draggedTableCard = null;
           return;
@@ -289,7 +412,9 @@ function updateTableCards(tableCards) {
           fromStack.cards[0].card === toStack.cards[0].card &&
           fromStack.cards[0].card + toStack.cards[0].card <= 14
         ) {
+          console.log('[CHOICE] Both stacks are single cards of same value and sum <= 14: prompt for sum or stack');
           showStackChoiceModal('Combine as sum or keep as stack?', (choice) => {
+            console.log(`[MODAL CHOICE] User chose: ${choice}`);
             playCard({
               type: "boardstack",
               gameCode: currentGameCode,
@@ -301,14 +426,40 @@ function updateTableCards(tableCards) {
           });
           return;
         }
-        // Otherwise, just send the boardstack action
-        playCard({
-          type: "boardstack",
-          gameCode: currentGameCode,
-          from: fromStack.id,
-          to: toStack.id
-        });
-        draggedTableCard = null;
+        // If the sum of both stacks matches, just merge (do NOT send stackAsSum)
+        const fromSum = fromStack.cards.reduce((acc, c) => acc + c.card, 0);
+        const toSum = toStack.cards.reduce((acc, c) => acc + c.card, 0);
+        if (fromSum === toSum) {
+          console.log('[ACTION] Sum of both stacks matches: just merge');
+          playCard({
+            type: "boardstack",
+            gameCode: currentGameCode,
+            from: fromStack.id,
+            to: toStack.id
+          });
+          draggedTableCard = null;
+          return;
+        }
+        // Otherwise, send boardstack with stackAsSum: true if sum <= 14
+        const allCards = [...fromStack.cards, ...toStack.cards];
+        const sum = allCards.reduce((acc, c) => acc + c.card, 0);
+        if (sum <= 14) {
+          console.log('[ACTION] Sum of all cards <= 14: send boardstack with stackAsSum: true');
+          playCard({
+            type: "boardstack",
+            gameCode: currentGameCode,
+            from: fromStack.id,
+            to: toStack.id,
+            stackAsSum: true
+          });
+          draggedTableCard = null;
+          return;
+        } else {
+          console.log('[ERROR] Cannot create a stack above 14.');
+          showStatusModal('Cannot create a stack above 14.');
+          draggedTableCard = null;
+          return;
+        }
       }
     });
 
@@ -319,5 +470,14 @@ function updateTableCards(tableCards) {
 function playCard(action) {
   if (!action.gameCode) action.gameCode = currentGameCode;
   socket.emit('play card', action);
-  console.log('ACTION SENT:', action);
+  console.info('Action', action);
+}
+
+function updateDebugInfo({ gameCode, socketId, extra }) {
+  const debugDiv = document.getElementById('debugInfo');
+  debugDiv.innerHTML = `
+    <b>Game Code:</b> ${gameCode || '—'}<br>
+    <b>Socket ID:</b> ${socket.id || '—'}<br>
+    ${extra ? `<div>${extra}</div>` : ''}
+  `;
 }

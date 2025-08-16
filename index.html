@@ -7,20 +7,23 @@
   <link href="style.css" rel="stylesheet" />
 </head>
 <body>
+  <div id="debugInfo" class="debug-info"></div>
   <header>
     <h1 id="title">Tableen</h1>
     <div id="lobby">
-      <div class="createContainer">
-        <button id="createBtn">Create Game</button>
-      </div>
-      <p>OR</p>
-      <div class="joinContainer">
-        <input id="joinCode" placeholder="Enter game code" maxlength="8" />
-        <button id="joinBtn">Join Game</button>
+      <div id="gameStartOptions">
+        <div id="createContainer">
+          <button id="createBtn">Create Game</button>
+        </div>
+        <p>OR</p>
+        <div id="joinContainer">
+          <input id="joinCode" placeholder="Enter game code" maxlength="8" />
+          <button id="joinBtn">Join Game</button>
+        </div>
       </div>
 
       <div id="gameCodeBox" class="hidden">
-        Share this code to join a game: <span id="gameCode"></span>
+        Your Game Code: <strong><span id="gameCode"></span></strong>
       </div>
       <div id="lobbyStatus"></div>
     </div>

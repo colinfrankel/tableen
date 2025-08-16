@@ -1,5 +1,4 @@
-const { validateAndApplyAction, generateStackId } = require('./gameLogic');
-// index.js
+const { validateAndApplyAction, generateStackId, calculatePoints } = require('./gameLogic');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -11,10 +10,8 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-// Serve static frontend from ./public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- Full deck (kept in same shape as your original) ---
 const fullDeck = [
   [{ card: 1, suit: 'clubs', stackSum: 1 }], [{ card: 2, suit: 'clubs', stackSum: 2 }],
   [{ card: 3, suit: 'clubs', stackSum: 3 }], [{ card: 4, suit: 'clubs', stackSum: 4 }],
@@ -59,26 +56,12 @@ function makeCode(length = 5) {
   return Math.random().toString(36).substr(2, length).toUpperCase();
 }
 
-// games will hold game state per gameCode
-// structure: {
-//   [gameCode]: {
-//     deck: [...],
-//     tableCards: [...],
-//     playerHands: { playerOne: [], playerTwo: [] },
-//     currentPlayer: socketId,
-//     playerIds: { playerOne: socketId, playerTwo: socketId or null },
-//     collected: { playerOne: [], playerTwo: [] } // optional for scoring
-//   }
-// }
 const games = {};
-
-// map socketId -> { gameCode, playerKey }
 const socketMap = {};
 
 io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id);
 
-  // Create a new game and return the code
   socket.on('create game', (cb) => {
     let code;
     do { code = makeCode(5); } while (games[code]);
@@ -90,7 +73,8 @@ io.on('connection', (socket) => {
       playerHands: { playerOne: [], playerTwo: [] },
       currentPlayer: null,
       playerIds: { playerOne: socket.id, playerTwo: null },
-      collected: { playerOne: [], playerTwo: [] }
+      collected: { playerOne: [], playerTwo: [] },
+      points: { playerOne: 0, playerTwo: 0 }
     };
 
     socket.join(code);
@@ -101,7 +85,6 @@ io.on('connection', (socket) => {
     socket.emit('game created', { code });
   });
 
-  // Join existing game by code
   socket.on('join game', (code, cb) => {
     const game = games[code];
     if (!game) {
@@ -117,16 +100,13 @@ io.on('connection', (socket) => {
     socket.join(code);
     socketMap[socket.id] = { gameCode: code, playerKey: 'playerTwo' };
 
-    // Deal cards and start game
-    // copy to avoid mutating original deck array reference
     if (game.deck.length < 12) {
-      // reinitialize deck if somehow not enough cards
       game.deck = shuffle(fullDeck);
     }
 
     game.playerHands.playerOne = game.deck.slice(0, 4);
     game.playerHands.playerTwo = game.deck.slice(4, 8);
-    game.tableCards = game.deck.slice(8, 12).map(cardArr => ({ 
+    game.tableCards = game.deck.slice(8, 12).map(cardArr => ({
       id: generateStackId(),
       cards: [...cardArr],
       stackNumber: cardArr[0].card
@@ -135,14 +115,15 @@ io.on('connection', (socket) => {
 
     game.currentPlayer = game.playerIds.playerOne;
 
-    // notify the two players
     io.to(game.playerIds.playerOne).emit('your turn', {
+      ...game,
       hand: game.playerHands.playerOne,
       table: game.tableCards,
       opponentCards: game.playerHands.playerTwo.length,
       gameCode: code
     });
     io.to(game.playerIds.playerTwo).emit('wait', {
+      ...game,
       hand: game.playerHands.playerTwo,
       table: game.tableCards,
       opponentCards: game.playerHands.playerOne.length,
@@ -154,7 +135,6 @@ io.on('connection', (socket) => {
     io.to(code).emit('joined', { message: 'Both players connected', code });
   });
 
-  // Handle a play from a player. Payload must include gameCode
   socket.on('play card', (payload) => {
     const mapping = socketMap[socket.id];
     if (!mapping) return socket.emit('status', 'You are not in a game.');
@@ -165,36 +145,91 @@ io.on('connection', (socket) => {
       return socket.emit('status', 'Not your turn!');
     }
     const playerKey = game.playerIds.playerOne === socket.id ? 'playerOne' : 'playerTwo';
-    // Validate and apply action
     const { newState, prompt, error } = validateAndApplyAction(game, payload, playerKey);
     if (error) return socket.emit('status', error);
     if (prompt) {
-      // Send prompt to client for further input
       return socket.emit('prompt', prompt);
     }
     if (newState) {
-      // Update game state
       games[gameCode] = newState;
-      // Only switch turn if action is not boardstack
-      console.log(payload)
+
+      const handsEmpty = game.playerHands.playerOne.length === 0 && game.playerHands.playerTwo.length === 0;
+      if (handsEmpty) {
+        if (game.deck.length > 0) {
+          game.playerHands.playerOne = game.deck.splice(0, 4);
+          game.playerHands.playerTwo = game.deck.splice(0, 4);
+        } else {
+          // --- ROUND OVER: Calculate points ---
+          const { pointsA, pointsB } = calculatePoints(game.collected.playerOne, game.collected.playerTwo);
+          game.points.playerOne += pointsA;
+          game.points.playerTwo += pointsB;
+
+          io.to(gameCode).emit('status',
+            `Round over!\nPlayer 1: ${game.points.playerOne} points\nPlayer 2: ${game.points.playerTwo} points`
+          );
+
+          if (game.points.playerOne >= 21 || game.points.playerTwo >= 21) {
+            let winner = '';
+            if (game.points.playerOne > game.points.playerTwo) winner = 'Player 1 wins!';
+            else if (game.points.playerTwo > game.points.playerOne) winner = 'Player 2 wins!';
+            else winner = 'It\'s a tie!';
+            io.to(gameCode).emit('status', `Game over! ${winner}`);
+            delete games[gameCode];
+            return;
+          }
+
+          // Otherwise, shuffle and start new round
+          game.deck = shuffle(fullDeck);
+          game.playerHands.playerOne = game.deck.slice(0, 4);
+          game.playerHands.playerTwo = game.deck.slice(4, 8);
+          game.tableCards = game.deck.slice(8, 12).map(cardArr => ({
+            id: generateStackId(),
+            cards: [...cardArr],
+            stackNumber: cardArr[0].card
+          }));
+          game.deck.splice(0, 12);
+          game.collected.playerOne = [];
+          game.collected.playerTwo = [];
+
+          game.currentPlayer = game.playerIds.playerOne;
+          io.to(game.playerIds.playerOne).emit('your turn', {
+            ...game,
+            hand: game.playerHands.playerOne,
+            table: game.tableCards,
+            opponentCards: game.playerHands.playerTwo.length,
+            gameCode
+          });
+          io.to(game.playerIds.playerTwo).emit('wait', {
+            ...game,
+            hand: game.playerHands.playerTwo,
+            table: game.tableCards,
+            opponentCards: game.playerHands.playerOne.length,
+            gameCode
+          });
+          return;
+        }
+      }
+
       if (payload.type !== 'boardstack') {
         const opponentKey = playerKey === 'playerOne' ? 'playerTwo' : 'playerOne';
         game.currentPlayer = game.playerIds[opponentKey];
         io.to(game.currentPlayer).emit('your turn', {
+          ...game,
           hand: game.playerHands[opponentKey],
           table: game.tableCards,
           opponentCards: game.playerHands[playerKey].length,
           gameCode
         });
         io.to(socket.id).emit('wait', {
+          ...game,
           hand: game.playerHands[playerKey],
           table: game.tableCards,
           opponentCards: game.playerHands[opponentKey].length,
           gameCode
         });
       } else {
-        // If boardstack, keep turn with current player
         io.to(socket.id).emit('your turn', {
+          ...game,
           hand: game.playerHands[playerKey],
           table: game.tableCards,
           opponentCards: game.playerHands[playerKey === 'playerOne' ? 'playerTwo' : 'playerOne'].length,
@@ -205,7 +240,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // graceful disconnect: remove from game and notify the other player
   socket.on('disconnect', () => {
     console.log('Socket disconnected:', socket.id);
     const mapping = socketMap[socket.id];
@@ -218,19 +252,13 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // inform the other player if present
     const otherPlayerId = playerKey === 'playerOne' ? game.playerIds.playerTwo : game.playerIds.playerOne;
     if (otherPlayerId) {
       io.to(otherPlayerId).emit('opponent disconnected', { message: 'Opponent disconnected' });
-      // leave room and delete the game (simple cleanup)
     }
 
-    // cleanup
     try {
-      // remove all sockets in the room (optional), but we will delete the game
       delete games[gameCode];
-
-      // remove mapping for both players
       if (game.playerIds.playerOne) delete socketMap[game.playerIds.playerOne];
       if (game.playerIds.playerTwo) delete socketMap[game.playerIds.playerTwo];
     } catch (err) {
