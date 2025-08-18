@@ -1,9 +1,34 @@
+/* Root color variables */
+:root {
+  --color-bg: #020e1c;
+  --color-bg-light: #041930;
+  --color-border: #fff;
+  --color-stack-border: #ddd;
+  --color-stack-bg: #041930;
+  --color-modal-bg: #fff;
+  --color-modal-text: #222;
+  --color-modal-shadow: rgba(0,0,0,0.3);
+  --color-btn-bg: #0a3d91;
+  --color-btn-bg-hover: #1761c7;
+  --color-btn-text: #fff;
+  --color-card-border: #ddd;
+  --color-card-shadow: rgba(0, 0, 0, 0.2);
+  --color-debug-bg: rgba(107, 107, 107, 0.45);
+  --color-debug-text: #fff;
+  --color-stack-number: #fff;
+  --color-stack-number-shadow: rgba(0, 0, 0, 0.5);
+  --color-mini-card-border: #000;
+  --color-mini-card-bg: #fff;
+  --color-mini-card-text: #222;
+}
+
+/* General styles */
 html, body {
   margin: 0;
   padding: 0;
   font-family: Verdana, Tahoma, sans-serif;
-  background-color: #041930;
-  color: white;
+  background-color: var(--color-bg);
+  color: var(--color-border);
 }
 
 header {
@@ -31,29 +56,29 @@ header {
   font-size: 1em;
   border-radius: 6px;
   border: none;
-  background: #0a3d91;
-  color: #fff;
+  background: var(--color-btn-bg);
+  color: var(--color-btn-text);
   cursor: pointer;
   transition: background 0.2s;
 }
 
 #createBtn:hover, #joinBtn:hover {
-  background: #1761c7;
+  background: var(--color-btn-bg-hover);
 }
 
 #joinCode {
   padding: 0.5em;
   font-size: 1em;
   border-radius: 6px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-stack-border);
   width: 200px;
 }
 
 #createContainer, #joinContainer {
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-stack-border);
   border-radius: 8px;
   padding: 1em;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-light);
   width: 300px;
 }
 
@@ -75,17 +100,23 @@ header {
   width: 80px;
   margin: 5px;
   cursor: grab;
+  border: 1px solid var(--color-card-border);
+  border-radius: 8px;
+  box-shadow: 0px 4px 6px var(--color-card-shadow);
 }
 
 #opponentCards {
   display: none;
+  height: 125px;
 }
 
 #tableCards {
-  border: 2px solid white;
+  background-color: var(--color-stack-bg);
+  border: 2px solid var(--color-border);
   border-radius: 10px;
-  padding: 40px 0px 20px 0px;
+  padding: 40px 40px 20px 40px;
   min-width: 400px;
+  height: 160px;
 }
 
 .stack {
@@ -99,11 +130,11 @@ header {
 .stack .card {
   position: absolute;
   top: 0;
-  left: 3px;
-  transform: translate(0, calc(5px * var(--stack-index))) rotate(calc(15deg * var(--stack-index)));
+  left: 50%;
+  transform: translate(-50%, calc(5px * var(--stack-index))) rotate(calc(15deg * var(--stack-index)));
   z-index: calc(var(--stack-index));
-  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
-  border: 1px solid #ddd;
+  box-shadow: 0px 4px 6px var(--color-card-shadow);
+  border: 1px solid var(--color-card-border);
   border-radius: 8px;
   transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -111,11 +142,11 @@ header {
 .stack-number {
   transform: translateY(-30px);
   position: absolute;
-  color: white;
+  color: var(--color-stack-number);
   font-size: 1.2em;
   font-weight: bold;
   width: 100%;
-  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);
+  text-shadow: 1px 1px 1px var(--color-stack-number-shadow);
 }
 
 .hidden { display: none !important; }
@@ -131,14 +162,24 @@ header {
   z-index: 1000;
 }
 .modal {
-  background: #fff;
-  color: #222;
+  background: var(--color-modal-bg);
+  color: var(--color-modal-text);
   border-radius: 10px;
-  padding: 2em 2.5em;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-  min-width: 300px;
+  padding: 1em 1.2em;
+  box-shadow: 0 8px 32px var(--color-modal-shadow);
+  min-width: 260px;
+  max-width: 90vw;
+  max-height: 80vh;
   text-align: center;
+  overflow-y: auto;
+  font-size: 1em;
 }
+
+/* Make card summaries wrap nicely */
+.modal p {
+  margin: 0.5em 0 0.2em 0;
+}
+
 .modal-buttons {
   margin-top: 1.5em;
 }
@@ -148,21 +189,21 @@ header {
   font-size: 1em;
   border-radius: 6px;
   border: none;
-  background: #0a3d91;
-  color: #fff;
+  background: var(--color-btn-bg);
+  color: var(--color-btn-text);
   cursor: pointer;
   transition: background 0.2s;
 }
 .modal-buttons button:hover {
-  background: #1761c7;
+  background: var(--color-btn-bg-hover);
 }
 
 .debug-info {
   position: fixed;
   bottom: 0;
   left: 0;
-  background: rgba(10, 61, 145, 0.95);
-  color: #fff;
+  background: var(--color-debug-bg);
+  color: var(--color-debug-text);
   font-size: 0.95em;
   padding: 10px 16px;
   border-top-right-radius: 10px;
@@ -174,12 +215,14 @@ header {
 }
 
 .mini-card {
-	border: 2px solid black;
-	padding: 3px;
-	border-radius: 10px;
-	margin: 2px 0px;
+  border: 2px solid var(--color-mini-card-border);
+  background: var(--color-mini-card-bg);
+  color: var(--color-mini-card-text);
+  padding: 3px;
+  border-radius: 10px;
+  margin: 2px 0px;
 }
 
 #opponentLastAction {
-  color: black;
+  color: var(--color-modal-text);
 }
