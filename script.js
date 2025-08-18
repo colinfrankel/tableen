@@ -716,12 +716,25 @@ function updateTableCards(tableCards, playerHand = []) {
           draggedTableCard = null;
           return;
         }
+        // If both stacks have the same stackNumber, just merge as a stack (classic stack)
+        console.log(fromStack.stackNumber, toStack.stackNumber);
+        if (fromStack.stackNumber === toStack.stackNumber) {
+          playCard({
+            type: "boardstack",
+            gameCode: currentGameCode,
+            from: fromStack.id,
+            to: toStack.id,
+            stackAsSum: false // classic stack
+          });
+          draggedTableCard = null;
+          return;
+        }
 
         // Otherwise, send boardstack with stackAsSum: true if sum <= 14
         const allCards = [...fromStack.cards, ...toStack.cards];
         const totalSum = allCards.reduce((acc, c) => acc + c.card, 0);
         if (totalSum > 14) {
-          showStatusModal('Cannot create a stack above 14.');
+          showStatusModal('Cannot create a stack above 14!');
           draggedTableCard = null;
           return;
         }

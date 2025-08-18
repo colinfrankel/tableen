@@ -149,13 +149,9 @@ function validateAndApplyAction(gameState, action, playerKey) {
     }
 
     // If all cards in both stacks are the same value, just merge (do NOT sum)
-    const allFromSame = fromStack.cards.every(c => c.card === fromStack.cards[0].card);
-    const allToSame = toStack.cards.every(c => c.card === toStack.cards[0].card);
-    const sameValue = allFromSame && allToSame && (fromStack.cards[0].card === toStack.cards[0].card);
-
-    if (sameValue) {
+    if (fromStack.stackNumber === toStack.stackNumber) {
       toStack.cards = [...toStack.cards, ...fromStack.cards];
-      toStack.stackNumber = toStack.cards[0].card;
+      toStack.stackNumber = fromStack.stackNumber;
       gameState.tableCards.splice(fromIndex, 1);
       return { newState: gameState };
     }
