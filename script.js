@@ -117,6 +117,8 @@ socket.on('wait', (data) => {
   });
 });
 
+
+
 socket.on('update table', (table, hand) => {
   updateTableCards(table, hand);
 });
@@ -124,6 +126,112 @@ socket.on('update table', (table, hand) => {
 socket.on('status', (msg) => {
   showStatusModal(msg);
   updateDebugInfo({ extra: msg });
+});
+
+socket.on('opponent action', (data) => {
+  const box = document.getElementById('opponentLastAction');
+
+  // Helper for card display
+  function miniCardText(c) {
+    if (!c) return '';
+    let val = c.card;
+    if (val === 1 || val === 14) val = 'A';
+    if (val === 11) val = 'J';
+    if (val === 12) val = 'Q';
+    if (val === 13) val = 'K';
+    let suit = '';
+    let color = '';
+    switch (c.suit) {
+      case 'hearts': suit = '♥️'; color = 'red'; break;
+      case 'diamonds': suit = '♦️'; color = 'red'; break;
+      case 'clubs': suit = '♣️'; color = 'black'; break;
+      case 'spades': suit = '♠️'; color = 'black'; break;
+    }
+    return `<span style="color:${color};font-weight:bold;">${val}${suit}</span>`;
+  }
+
+  // Helper to get stack label and cards
+  function stackLabel(stackId, stackCards, stackNumber) {
+    let label = '';
+    if (stackNumber === 1 || stackNumber === 14) label = 'Aces';
+    else if (stackNumber === 11) label = 'Jacks';
+    else if (stackNumber === 12) label = 'Queens';
+    else if (stackNumber === 13) label = 'Kings';
+    else label = stackNumber;
+    const cards = stackCards.map(miniCardText).join(', ');
+    return `${label} [${cards}]`;
+  }
+
+  // Build a readable action description
+  let actionText = '';
+  if (data.type === 'normal') {
+    actionText = `Played ${miniCardText(data.playedCard)} to the table.`;
+  } else if (data.type === 'stack') {
+    // If stacking two cards as a sum (e.g., Q on A to make K)
+    if (
+      data.stackCards &&
+      data.stackCards.length === 2 &&
+      data.stackAsSum
+    ) {
+      let resultLabel = '';
+      if (data.stackNumber === 11) resultLabel = 'J';
+      else if (data.stackNumber === 12) resultLabel = 'Q';
+      else if (data.stackNumber === 13) resultLabel = 'K';
+      else if (data.stackNumber === 14) resultLabel = 'A';
+      else resultLabel = data.stackNumber;
+      actionText = `Stacked ${miniCardText(data.playedCard)} on ${miniCardText(data.stackCards[0])} to make ${resultLabel}`;
+    }
+    // If stacking two identical cards (classic stack, not sum)
+    else if (
+      data.stackCards &&
+      data.stackCards.length >= 2 &&
+      !data.stackAsSum &&
+      data.stackCards.every(c => c.card === data.stackCards[0].card)
+    ) {
+      actionText = `Stacked ${miniCardText(data.playedCard)} on stack ${miniCardText(data.stackCards[0])}`;
+    }
+    // If stacking onto a multi-card stack, show all cards
+    else if (data.stackCards && data.stackCards.length > 1) {
+      const stackCardsText = data.stackCards.map(miniCardText).join(', ');
+      actionText = `Stacked ${miniCardText(data.playedCard)} on stack ${stackCardsText}`;
+      if (data.stackAsSum) actionText += ' (as sum)';
+    }
+    // Default: stacked on a pile, show only first card
+    else {
+      actionText = `Stacked ${miniCardText(data.playedCard)} on stack ${miniCardText(data.stackCards[0])}`;
+      if (data.stackAsSum) actionText += ' (as sum)';
+    }
+  } else if (data.type === 'grab') {
+    // Show all cards in the grabbed stack
+    const grabbedCards = data.stackCards && data.stackCards.length > 0
+      ? data.stackCards.map(miniCardText).join(', ')
+      : '';
+    actionText = `Grabbed stack ${grabbedCards} with ${miniCardText(data.playedCard)}.`;
+  } else if (data.type === 'boardstack') {
+    // If both stacks have only one card, show just those cards
+    const fromCard = data.fromStackCards && data.fromStackCards.length === 1 ? miniCardText(data.fromStackCards[0]) : '';
+    const toCard = data.toStackCards && data.toStackCards.length === 1 ? miniCardText(data.toStackCards[0]) : '';
+    if (fromCard && toCard) {
+      if (data.stackAsSum) {
+        actionText = `Combined stacks ${fromCard} and ${toCard} as sum.`;
+      } else {
+        actionText = `Stacked stack ${fromCard} onto stack ${toCard}.`;
+      }
+    } else {
+      // Fallback: show all cards in each stack
+      const fromCards = data.fromStackCards ? data.fromStackCards.map(miniCardText).join(', ') : '';
+      const toCards = data.toStackCards ? data.toStackCards.map(miniCardText).join(', ') : '';
+      if (data.stackAsSum) {
+        actionText = `Combined stacks [${fromCards}] and [${toCards}] as sum.`;
+      } else {
+        actionText = `Stacked stack [${fromCards}] onto stack [${toCards}].`;
+      }
+    }
+  } else {
+    actionText = 'Gonna be so honest no idea what just happened. This shouldn\'t happen.';
+  }
+
+  box.innerHTML = `<b>Opponent's last action:</b><br>${actionText}`;
 });
 
 socket.on('round over', (data) => {
@@ -237,6 +345,16 @@ function updateGameUI(data, isYourTurn) {
 
     cardElement.addEventListener('dragstart', function (e) {
       draggedCard = { card: displayCardValue, suit: card.suit, stackSum: card.stackSum };
+      socket.emit('drag card', {
+        gameCode: currentGameCode,
+        card: draggedCard
+      });
+    });
+
+    cardElement.addEventListener('dragend', function (e) {
+      socket.emit('drag end', {
+        gameCode: currentGameCode
+      });
     });
 
     document.getElementById('cards').appendChild(cardElement);
@@ -275,7 +393,18 @@ function updateTableCards(tableCards, playerHand = []) {
       cardElement.setAttribute('draggable', true);
       cardElement.addEventListener('dragstart', (e) => {
         draggedTableCard = { card: card.card, suit: card.suit, stackIndex, stackId: stackObj.id };
+        socket.emit('drag card', {
+          gameCode: currentGameCode,
+          card: draggedCard
+        });
       });
+
+      cardElement.addEventListener('dragend', function (e) {
+        socket.emit('drag end', {
+          gameCode: currentGameCode
+        });
+      });
+
       stackDiv.appendChild(cardElement);
     });
 

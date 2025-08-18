@@ -12,7 +12,6 @@ const io = new Server(server, {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Deck generator function (returns a fresh deck array)
 function getFullDeck() {
   const suits = ['clubs', 'diamonds', 'hearts', 'spades'];
   const deck = [];
@@ -56,8 +55,8 @@ io.on('connection', (socket) => {
       playerIds: { playerOne: socket.id, playerTwo: null },
       collected: { playerOne: [], playerTwo: [] },
       points: { playerOne: 0, playerTwo: 0 },
-      nextStackId: 1, // game-specific stack ID
-      lastGrabber: null // track last grabber for end-of-round collection
+      nextStackId: 1,
+      lastGrabber: null
     };
 
     socket.join(code);
@@ -128,12 +127,50 @@ io.on('connection', (socket) => {
       return socket.emit('status', 'Not your turn!');
     }
     const playerKey = game.playerIds.playerOne === socket.id ? 'playerOne' : 'playerTwo';
-    const { newState, prompt, error } = validateAndApplyAction(game, payload, playerKey);
+
+    // --- EMIT OPPONENT ACTION WITH STACK DETAILS BEFORE STATE CHANGE ---
+    const opponentKey = playerKey === 'playerOne' ? 'playerTwo' : 'playerOne';
+    const opponentId = game.playerIds[opponentKey];
+
+    function getStackInfo(stackId) {
+      const stackObj = game.tableCards.find(s => s.id === stackId);
+      return stackObj
+        ? { stackCards: stackObj.cards, stackNumber: stackObj.stackNumber }
+        : { stackCards: [], stackNumber: null };
+    }
+
+    let actionPayload = {
+      type: payload.type,
+      playedCard: payload.playedCard,
+      stackId: payload.stackId,
+      from: payload.from,
+      to: payload.to,
+      stackAsSum: payload.stackAsSum
+    };
+
+    // For grab and stack, send stack info BEFORE state changes
+    if (payload.type === 'grab' || payload.type === 'stack') {
+      const info = getStackInfo(payload.stackId);
+      actionPayload.stackCards = info.stackCards;
+      actionPayload.stackNumber = info.stackNumber;
+    }
+
+    // For boardstack, send info for both stacks BEFORE state changes
+    if (payload.type === 'boardstack') {
+      const fromInfo = getStackInfo(payload.from);
+      const toInfo = getStackInfo(payload.to);
+      actionPayload.fromStackCards = fromInfo.stackCards;
+      actionPayload.fromStackNumber = fromInfo.stackNumber;
+      actionPayload.toStackCards = toInfo.stackCards;
+      actionPayload.toStackNumber = toInfo.stackNumber;
+    }
 
     // Track last grabber for end-of-round collection
     if (payload.type === 'grab') {
       game.lastGrabber = playerKey;
     }
+
+    const { newState, prompt, error } = validateAndApplyAction(game, payload, playerKey);
 
     if (error) return socket.emit('status', error);
     if (prompt) {
@@ -212,8 +249,18 @@ io.on('connection', (socket) => {
         }
       }
 
+      // Emit opponent action with correct stack info
+      if (opponentId) {
+        console.log(`Emitting action to opponent ${opponentId}:`, actionPayload);
+        io.to(opponentId).emit('opponent action', actionPayload);
+      }
+
+      // --- EMIT TABLE UPDATES ---
+      io.to(game.playerIds.playerOne).emit('update table', game.tableCards, game.playerHands.playerOne);
+      io.to(game.playerIds.playerTwo).emit('update table', game.tableCards, game.playerHands.playerTwo);
+
+      // --- EMIT TURN INFO ---
       if (payload.type !== 'boardstack') {
-        const opponentKey = playerKey === 'playerOne' ? 'playerTwo' : 'playerOne';
         game.currentPlayer = game.playerIds[opponentKey];
         io.to(game.currentPlayer).emit('your turn', {
           ...game,
@@ -238,8 +285,6 @@ io.on('connection', (socket) => {
           gameCode
         });
       }
-      io.to(game.playerIds.playerOne).emit('update table', game.tableCards, game.playerHands.playerOne);
-      io.to(game.playerIds.playerTwo).emit('update table', game.tableCards, game.playerHands.playerTwo);
     }
   });
 
@@ -268,6 +313,7 @@ io.on('connection', (socket) => {
       console.error('Error cleaning game:', err);
     }
   });
+
 });
 
 const PORT = process.env.PORT || 3000;

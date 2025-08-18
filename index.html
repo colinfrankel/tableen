@@ -1,14 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Tableen — Beta</title>
   <link href="style.css" rel="stylesheet" />
 </head>
+
 <body>
   <div id="debugInfo" class="debug-info"></div>
   <header>
+    <div id="opponentLastAction"
+      style="position:fixed;top:12px;left:12px;z-index:2000;background:#fffbe7;border:1px solid #ccc;padding:8px 14px;border-radius:8px;box-shadow:0 2px 8px #0002;font-size:1.1em;min-width:120px;max-width:320px;">
+    </div>
     <h1 id="title">Tableen</h1>
     <div id="lobby">
       <div id="gameStartOptions">
@@ -32,9 +37,7 @@
   <main>
     <div class="container">
       <div id="turnStatus"></div>
-
       <div id="opponentCards" class="card-container">
-        <!-- opponent cards rendered here -->
       </div>
 
       <div id="tableCards" class="card-container"></div>
@@ -46,14 +49,15 @@
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
   <script src="script.js" defer></script>
 </body>
-  <!-- Modal for stack choice -->
-  <div id="modalOverlay" class="modal-overlay hidden">
-    <div class="modal">
-      <div class="modal-message" id="modalMessage"></div>
-      <div class="modal-buttons">
-        <button id="modalOption1">Stack as two cards</button>
-        <button id="modalOption2">Stack as sum</button>
-      </div>
+<!-- Modal for stack choice -->
+<div id="modalOverlay" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-message" id="modalMessage"></div>
+    <div class="modal-buttons">
+      <button id="modalOption1">Stack as two cards</button>
+      <button id="modalOption2">Stack as sum</button>
     </div>
   </div>
+</div>
+
 </html>

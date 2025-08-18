@@ -169,3 +169,7 @@ header {
 	border-radius: 10px;
 	margin: 2px 0px;
 }
+
+#opponentLastAction {
+  color: black;
+}
