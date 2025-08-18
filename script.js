@@ -69,7 +69,7 @@ function showGameCode(code) {
 
 // socket events
 socket.on('connect', () => {
-  updateDebugInfo({ extra: `Connected to Server!` });
+  console.info('Connected to server');
 });
 
 socket.on('game created', ({ code }) => {
@@ -77,14 +77,19 @@ socket.on('game created', ({ code }) => {
   showGameCode(code);
   lobbyStatus.innerText = `Game ${code} created — waiting for other player...`;
   document.getElementById('gameStartOptions').classList.add('hidden');
-  updateDebugInfo({ gameCode: currentGameCode, socketId: socket.id });
+  updateDebugInfo({ gameCode: currentGameCode });
 
 });
 
 socket.on('joined', (data) => {
   document.getElementById('lobby').classList.add('hidden');
   document.getElementById('tableCards').classList.remove('hidden');
-  updateDebugInfo({ gameCode: currentGameCode, socketId: socket.id });
+    updateDebugInfo({
+    gameCode: currentGameCode,
+    extra: `
+      <b>Deck Size:</b> 40<br>
+    `
+  });
 
 });
 
@@ -93,12 +98,8 @@ socket.on('your turn', (data) => {
   updateGameUI(data, true);
   updateDebugInfo({
     gameCode: currentGameCode,
-    socketId: socket.id,
     extra: `
       <b>Deck Size:</b> ${data.deck ? data.deck.length : '—'}<br>
-      <b>Your Hand:</b> ${data.hand.map(arr => arr[0].card + arr[0].suit[0].toUpperCase()).join(', ')}<br>
-      <b>Opponent Cards:</b> ${data.opponentCards}<br>
-      <b>Table:</b> ${data.table.map(s => `[${s.stackNumber}: ${s.cards.map(c => c.card + c.suit[0].toUpperCase()).join(', ')}]`).join(' ')}<br>
     `
   });
 });
@@ -108,12 +109,8 @@ socket.on('wait', (data) => {
   updateGameUI(data, false);
   updateDebugInfo({
     gameCode: currentGameCode,
-    socketId: socket.id,
     extra: `
       <b>Deck Size:</b> ${data.deck ? data.deck.length : '—'}<br>
-      <b>Your Hand:</b> ${data.hand.map(arr => arr[0].card + arr[0].suit[0].toUpperCase()).join(', ')}<br>
-      <b>Opponent Cards:</b> ${data.opponentCards}<br>
-      <b>Table:</b> ${data.table.map(s => `[${s.stackNumber}: ${s.cards.map(c => c.card + c.suit[0].toUpperCase()).join(', ')}]`).join(' ')}<br>
     `
   });
 });
@@ -284,7 +281,6 @@ socket.on('round over', (data) => {
   html += `<b>Opponent's Tableens:</b> ${data.opponentTableens || 0}<br>`;
 
   showStatusModal(`${data.message}<br><br>${html}`);
-  updateDebugInfo({ extra: html });
 });
 
 socket.on('opponent disconnected', (data) => {
@@ -433,7 +429,6 @@ function updateTableCards(tableCards, playerHand = []) {
       if (draggedCard) {
         // Handle stacking two identical cards
         if (stackObj.cards.length === 1 && stackObj.cards[0].card === draggedCard.card) {
-          console.log('[DEBUG] Stacking two identical cards');
           const stackSum = stackObj.cards[0].card + draggedCard.card;
           const numInHand = playerHand.filter(arr => arr[0].card === draggedCard.card).length;
           const hasSumCard = stackSum === 14
@@ -444,7 +439,6 @@ function updateTableCards(tableCards, playerHand = []) {
             if (numInHand === 1) {
               if (hasSumCard) {
                 showStackChoiceModal('Grab this pile or stack as sum?', (choice) => {
-                  console.log(`Player chose to ${choice} the stack`);
                   let playedCardValue = draggedCard.card;
                   if (choice === 'stack' && draggedCard.card === 14) {
                     playedCardValue = 1;
@@ -472,7 +466,6 @@ function updateTableCards(tableCards, playerHand = []) {
               }
             } else if (numInHand > 1) {
               showStackChoiceModal('Grab this pile or continue stacking?', (choice) => {
-                console.log(`Player chose to ${choice} the stack`);
                 let playedCardValue = draggedCard.card;
                 if (choice === 'stack' && draggedCard.card === 14) {
                   playedCardValue = 1;
@@ -501,7 +494,6 @@ function updateTableCards(tableCards, playerHand = []) {
           } else {
             if (numInHand > 1) {
               showStackChoiceModal('Grab this pile or continue stacking?', (choice) => {
-                console.log(`Player chose to ${choice} the stack`);
                 let playedCardValue = draggedCard.card;
                 if (choice === 'stack' && draggedCard.card === 14) {
                   playedCardValue = 1;
@@ -536,7 +528,6 @@ function updateTableCards(tableCards, playerHand = []) {
           const numStackSumInHand = playerHand.filter(arr => arr[0].card === stackSum).length;
           if (numStackSumInHand > 1) {
             showStackChoiceModal(`Continue to stack <code>${stackSum}s</code> or just grab it?`, (choice) => {
-              console.log(`Player chose to ${choice} the stack`);
               if (choice === 'stack') {
                 let playedCardValue = draggedCard.card;
                 if (draggedCard.card === 14) {
@@ -712,14 +703,15 @@ function updateTableCards(tableCards, playerHand = []) {
 function playCard(action) {
   if (!action.gameCode) action.gameCode = currentGameCode;
   socket.emit('play card', action);
-  console.info('Action', action);
 }
 
-function updateDebugInfo({ gameCode, socketId, extra }) {
+let lastDebugGameCode = null;
+
+function updateDebugInfo({ gameCode, extra }) {
+  if (gameCode) lastDebugGameCode = gameCode;
   const debugDiv = document.getElementById('debugInfo');
   debugDiv.innerHTML = `
-    <b>Game Code:</b> ${gameCode || '—'}<br>
-    <b>Socket ID:</b> ${socket.id || '—'}<br>
+    <b>Game Code:</b> ${lastDebugGameCode || '—'}<br>
     ${extra ? `<div>${extra}</div>` : ''}
   `;
 }
