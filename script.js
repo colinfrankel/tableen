@@ -84,7 +84,7 @@ socket.on('game created', ({ code }) => {
 socket.on('joined', (data) => {
   document.getElementById('lobby').classList.add('hidden');
   document.getElementById('tableCards').classList.remove('hidden');
-    updateDebugInfo({
+  updateDebugInfo({
     gameCode: currentGameCode,
     extra: `
       <b>Deck Size:</b> 40<br>
@@ -319,9 +319,9 @@ function updateGameUI(data, isYourTurn) {
   // player's hand (draggable)
   data.hand.forEach(cardArray => {
     const card = cardArray[0];
-    const displayCardValue = card.card === 1 ? 14 : card.card;
+    const displayCardValue = card.card === 14 ? 1 : card.card;
     const cardElement = document.createElement('img');
-    cardElement.src = `./cards/${card.suit}/${card.card}.svg`;
+    cardElement.src = `./cards/${card.suit}/${displayCardValue}.svg`;
     cardElement.classList.add('card');
     cardElement.setAttribute('draggable', true);
 
@@ -427,8 +427,31 @@ function updateTableCards(tableCards, playerHand = []) {
       }
 
       if (draggedCard) {
-        // Handle stacking two identical cards
-        if (stackObj.cards.length === 1 && stackObj.cards[0].card === draggedCard.card) {
+        // Helper to check if a card is an ace
+        const isAce = (card) => card === 1 || card === 14;
+
+        // Handle stacking two identical cards or two aces
+        if (
+          stackObj.cards.length === 1 &&
+          (
+            (isAce(stackObj.cards[0].card) && isAce(draggedCard.card)) ||
+            stackObj.cards[0].card === draggedCard.card
+          )
+        ) {
+          // Special case: stacking two aces should always be stackAsSum: true
+          if (isAce(stackObj.cards[0].card) && isAce(draggedCard.card)) {
+            playCard({
+              type: "stack",
+              gameCode: currentGameCode,
+              playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+              stackId: stackObj.id,
+              stackAsSum: true
+            });
+            draggedCard = null;
+            return;
+          }
+
+          // Otherwise, normal identical card stacking logic
           const stackSum = stackObj.cards[0].card + draggedCard.card;
           const numInHand = playerHand.filter(arr => arr[0].card === draggedCard.card).length;
           const hasSumCard = stackSum === 14
@@ -448,8 +471,8 @@ function updateTableCards(tableCards, playerHand = []) {
                     gameCode: currentGameCode,
                     playedCard: { card: playedCardValue, suit: draggedCard.suit },
                     stackId: stackObj.id,
-                    stackAsSum: choice === 'sum', // true if sum, false if classic stack
-                    stackSum // send the sum for backend logic if needed
+                    stackAsSum: choice === 'sum',
+                    stackSum
                   });
                   draggedCard = null;
                 });
@@ -629,6 +652,24 @@ function updateTableCards(tableCards, playerHand = []) {
           const allToSame = toStack.cards.every(c => c.card === toStack.cards[0].card);
           const sameValue = allFromSame && allToSame && (fromStack.cards[0].card === toStack.cards[0].card);
 
+          const isAce = (card) => card === 1 || card === 14;
+          const allFromAces = fromStack.cards.every(c => isAce(c.card));
+          const allToAces = toStack.cards.every(c => isAce(c.card));
+          const bothAceStacks = allFromAces && allToAces;
+
+          if (bothAceStacks) {
+            // Always combine as sum for two ace stacks
+            playCard({
+              type: "boardstack",
+              gameCode: currentGameCode,
+              from: fromStack.id,
+              to: toStack.id,
+              stackAsSum: true
+            });
+            draggedTableCard = null;
+            return;
+          }
+
           if (sameValue && hasSumCard && hasStackCard) {
             showStackChoiceModal('Combine as sum or keep as stack?', (choice) => {
               playCard({
@@ -703,6 +744,7 @@ function updateTableCards(tableCards, playerHand = []) {
 function playCard(action) {
   if (!action.gameCode) action.gameCode = currentGameCode;
   socket.emit('play card', action);
+  console.info(action)
 }
 
 let lastDebugGameCode = null;
