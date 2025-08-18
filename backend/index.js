@@ -55,6 +55,7 @@ io.on('connection', (socket) => {
       playerIds: { playerOne: socket.id, playerTwo: null },
       collected: { playerOne: [], playerTwo: [] },
       points: { playerOne: 0, playerTwo: 0 },
+      tableens: { playerOne: 0, playerTwo: 0 },
       nextStackId: 1,
       lastGrabber: null
     };
@@ -179,6 +180,10 @@ io.on('connection', (socket) => {
     if (newState) {
       games[gameCode] = newState;
 
+      if (game.tableCards.length === 0) {
+        game.tableens[playerKey] = (game.tableens[playerKey] || 0) + 1;
+      }
+
       const handsEmpty = game.playerHands.playerOne.length === 0 && game.playerHands.playerTwo.length === 0;
       if (handsEmpty) {
         if (game.deck.length > 0) {
@@ -194,15 +199,22 @@ io.on('connection', (socket) => {
 
           // --- ROUND OVER: Calculate points ---
           const { pointsA, pointsB } = calculatePoints(game.collected.playerOne, game.collected.playerTwo);
-          game.points.playerOne += pointsA;
-          game.points.playerTwo += pointsB;
+          game.points.playerOne += pointsA + (game.tableens.playerOne || 0);
+          game.points.playerTwo += pointsB + (game.tableens.playerTwo || 0);
 
-          io.to(gameCode).emit('round over', {
-            message: `Round over!\nPlayer 1: ${game.points.playerOne} points\nPlayer 2: ${game.points.playerTwo} points`,
-            collected: {
-              playerOne: game.collected.playerOne,
-              playerTwo: game.collected.playerTwo
-            }
+          io.to(game.playerIds.playerOne).emit('round over', {
+            message: `Round over!\nYou: ${game.points.playerOne} points\nOpponent: ${game.points.playerTwo} points`,
+            myCards: game.collected.playerOne,
+            opponentCards: game.collected.playerTwo,
+            myTableens: game.tableens.playerOne,
+            opponentTableens: game.tableens.playerTwo
+          });
+          io.to(game.playerIds.playerTwo).emit('round over', {
+            message: `Round over!\nYou: ${game.points.playerTwo} points\nOpponent: ${game.points.playerOne} points`,
+            myCards: game.collected.playerTwo,
+            opponentCards: game.collected.playerOne,
+            myTableens: game.tableens.playerTwo,
+            opponentTableens: game.tableens.playerOne
           });
 
           if (game.points.playerOne >= 21 || game.points.playerTwo >= 21) {
@@ -230,7 +242,14 @@ io.on('connection', (socket) => {
           game.nextStackId = 1;
           game.lastGrabber = null;
 
-          game.currentPlayer = game.playerIds.playerOne;
+          // --- SWAP WHO STARTS EACH ROUND ---
+          if (!game.roundStarter || game.roundStarter === 'playerTwo') {
+            game.roundStarter = 'playerOne';
+          } else {
+            game.roundStarter = 'playerTwo';
+          }
+          game.currentPlayer = game.playerIds[game.roundStarter];
+
           io.to(game.playerIds.playerOne).emit('your turn', {
             ...game,
             hand: game.playerHands.playerOne,
@@ -251,7 +270,6 @@ io.on('connection', (socket) => {
 
       // Emit opponent action with correct stack info
       if (opponentId) {
-        console.log(`Emitting action to opponent ${opponentId}:`, actionPayload);
         io.to(opponentId).emit('opponent action', actionPayload);
       }
 

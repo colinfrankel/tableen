@@ -57,6 +57,22 @@ function validateAndApplyAction(gameState, action, playerKey) {
     if (sum > 14) return { error: 'Cannot create a stack above 14.' };
     stack.cards.push(playedCard);
     stack.stackNumber = sum;
+
+    // --- AUTO COMBINE SAME SUM STACKS IF CREATED BY PLAYING A CARD ---
+    const thisStackId = stack.id;
+    const thisStackNumber = stack.stackNumber;
+    const matchingStacks = gameState.tableCards.filter(
+      s => s.id !== thisStackId && s.stackNumber === thisStackNumber
+    );
+    if (matchingStacks.length > 0) {
+      matchingStacks.forEach(s => {
+        stack.cards.push(...s.cards);
+      });
+      gameState.tableCards = gameState.tableCards.filter(
+        s => s.id === thisStackId || s.stackNumber !== thisStackNumber
+      );
+    }
+
     return { newState: gameState };
   }
 

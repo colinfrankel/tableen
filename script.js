@@ -83,6 +83,7 @@ socket.on('game created', ({ code }) => {
 
 socket.on('joined', (data) => {
   document.getElementById('lobby').classList.add('hidden');
+  document.getElementById('tableCards').classList.remove('hidden');
   updateDebugInfo({ gameCode: currentGameCode, socketId: socket.id });
 
 });
@@ -130,6 +131,7 @@ socket.on('status', (msg) => {
 
 socket.on('opponent action', (data) => {
   const box = document.getElementById('opponentLastAction');
+  box.classList.remove('hidden');
 
   // Helper for card display
   function miniCardText(c) {
@@ -237,39 +239,27 @@ socket.on('opponent action', (data) => {
 socket.on('round over', (data) => {
   // Helper to format a card as a mini image
   function miniCardText(c) {
-    // Card value
     let val = c.card;
     if (val === 1 || val === 14) val = 'A';
     if (val === 11) val = 'J';
     if (val === 12) val = 'Q';
     if (val === 13) val = 'K';
-
-    // Suit emoji and color
     let suit = '';
     let color = '';
     switch (c.suit) {
-      case 'hearts':
-        suit = '♥️'; color = 'red'; break;
-      case 'diamonds':
-        suit = '♦️'; color = 'red'; break;
-      case 'clubs':
-        suit = '♣️'; color = 'black'; break;
-      case 'spades':
-        suit = '♠️'; color = 'black'; break;
+      case 'hearts': suit = '♥️'; color = 'red'; break;
+      case 'diamonds': suit = '♦️'; color = 'red'; break;
+      case 'clubs': suit = '♣️'; color = 'black'; break;
+      case 'spades': suit = '♠️'; color = 'black'; break;
     }
     return `<span class="mini-card" style="display:inline-block;min-width:22px;color:${color};font-weight:bold;font-size:1.1em;text-align:center;">${val}${suit}</span>`;
   }
 
   function summarize(cards) {
-    // Separate aces (card 1 or 14)
     const aces = cards.filter(c => c.card === 1 || c.card === 14);
-    // Spades (not ace or 2)
     const spades = cards.filter(c => c.suit === 'spades' && c.card !== 1 && c.card !== 2);
-    // 2 of spades
     const twoSpades = cards.filter(c => c.card === 2 && c.suit === 'spades');
-    // 10 of diamonds
     const tenDiamonds = cards.filter(c => c.card === 10 && c.suit === 'diamonds');
-    // Other cards
     const others = cards.filter(c =>
       c.card !== 1 &&
       c.card !== 14 &&
@@ -288,14 +278,10 @@ socket.on('round over', (data) => {
     return html;
   }
 
-  // Determine which player you are
-  const myKey = socket.id === data.playerIds?.playerOne ? 'playerOne' : 'playerTwo';
-  const oppKey = myKey === 'playerOne' ? 'playerTwo' : 'playerOne';
-  const myCards = data.collected[myKey] || [];
-  const oppCards = data.collected[oppKey] || [];
-
-  let html = `<b>Your collected cards:</b><br>${summarize(myCards)}<br>`;
-  html += `<b>Opponent's collected cards:</b><br>${summarize(oppCards)}<br>`;
+  let html = `<b>Your collected cards:</b><br>${summarize(data.myCards)}<br>`;
+  html += `<b>Opponent's collected cards:</b><br>${summarize(data.opponentCards)}<br>`;
+  html += `<b>Your Tableens:</b> ${data.myTableens || 0}<br>`;
+  html += `<b>Opponent's Tableens:</b> ${data.opponentTableens || 0}<br>`;
 
   showStatusModal(`${data.message}<br><br>${html}`);
   updateDebugInfo({ extra: html });
@@ -447,10 +433,14 @@ function updateTableCards(tableCards, playerHand = []) {
       if (draggedCard) {
         // Handle stacking two identical cards
         if (stackObj.cards.length === 1 && stackObj.cards[0].card === draggedCard.card) {
-          const sum = stackObj.cards[0].card + draggedCard.card;
+          console.log('[DEBUG] Stacking two identical cards');
+          const stackSum = stackObj.cards[0].card + draggedCard.card;
           const numInHand = playerHand.filter(arr => arr[0].card === draggedCard.card).length;
-          const hasSumCard = playerHand.some(arr => arr[0].card === sum);
-          if (sum <= 14) {
+          const hasSumCard = stackSum === 14
+            ? playerHand.some(arr => arr[0].card === 1 || arr[0].card === 14)
+            : playerHand.some(arr => arr[0].card === stackSum);
+
+          if (stackSum <= 14) {
             if (numInHand === 1) {
               if (hasSumCard) {
                 showStackChoiceModal('Grab this pile or stack as sum?', (choice) => {
@@ -460,10 +450,12 @@ function updateTableCards(tableCards, playerHand = []) {
                     playedCardValue = 1;
                   }
                   playCard({
-                    type: choice === 'stack' ? "stack" : "grab",
+                    type: "stack",
                     gameCode: currentGameCode,
                     playedCard: { card: playedCardValue, suit: draggedCard.suit },
                     stackId: stackObj.id,
+                    stackAsSum: choice === 'sum', // true if sum, false if classic stack
+                    stackSum // send the sum for backend logic if needed
                   });
                   draggedCard = null;
                 });
@@ -486,11 +478,12 @@ function updateTableCards(tableCards, playerHand = []) {
                   playedCardValue = 1;
                 }
                 playCard({
-                  type: choice === 'stack' ? "stack" : "grab",
+                  type: "stack",
                   gameCode: currentGameCode,
                   playedCard: { card: playedCardValue, suit: draggedCard.suit },
                   stackId: stackObj.id,
-                  stackAsSum: choice === 'sum'
+                  stackAsSum: choice === 'sum',
+                  stackSum
                 });
                 draggedCard = null;
               }, "Stack", "Grab");
@@ -514,12 +507,14 @@ function updateTableCards(tableCards, playerHand = []) {
                   playedCardValue = 1;
                 }
                 playCard({
-                  type: choice === 'sum' ? "stack" : "grab",
+                  type: "stack",
                   gameCode: currentGameCode,
                   playedCard: { card: playedCardValue, suit: draggedCard.suit },
                   stackId: stackObj.id,
-                  stackAsSum: choice === 'sum'
+                  stackAsSum: choice === 'sum',
+                  stackSum
                 });
+                draggedCard = null;
               }, "Stack", "Grab");
               return;
             } else {
@@ -638,9 +633,12 @@ function updateTableCards(tableCards, playerHand = []) {
         const hasStackCard = playerHand.some(arr => arr[0].card === toStack.stackNumber);
 
         if (sum <= 14) {
-          console.log(playerHand)
-          console.log('Has Sum Card:', hasSumCard, 'Has Stack Card:', hasStackCard);
-          if (hasSumCard && hasStackCard) {
+          // Only prompt if both stacks are made of identical cards
+          const allFromSame = fromStack.cards.every(c => c.card === fromStack.cards[0].card);
+          const allToSame = toStack.cards.every(c => c.card === toStack.cards[0].card);
+          const sameValue = allFromSame && allToSame && (fromStack.cards[0].card === toStack.cards[0].card);
+
+          if (sameValue && hasSumCard && hasStackCard) {
             showStackChoiceModal('Combine as sum or keep as stack?', (choice) => {
               playCard({
                 type: "boardstack",
