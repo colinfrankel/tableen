@@ -226,3 +226,16 @@ header {
 #opponentLastAction {
   color: var(--color-modal-text);
 }
+
+#bugReport {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  color: white;
+  padding: 5px 10px;
+  border: 2px solid var(--color-border);
+  border-radius: 10px;
+  text-decoration: none;
+  background-color: var(--color-btn-bg);
+}
+
