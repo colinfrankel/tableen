@@ -71,22 +71,98 @@ io.on('connection', (socket) => {
   socket.on('join game', (code, cb) => {
     const game = games[code];
     if (!game) {
-      if (typeof cb === 'function') cb({ ok: false, message: 'Game not found' })
-      return;
-    }
-    if (game.playerIds.playerTwo) {
-      if (typeof cb === 'function') cb({ ok: false, message: 'Game full' })
+      if (typeof cb === 'function') cb({ ok: false, message: 'Game not found' });
       return;
     }
 
-    game.playerIds.playerTwo = socket.id;
+    let playerKey = null;
+    // Assign player slot based on disconnected status
+    if (!game.playerIds.playerOne || !io.sockets.sockets.get(game.playerIds.playerOne)) {
+      game.playerIds.playerOne = socket.id;
+      playerKey = 'playerOne';
+    } else if (!game.playerIds.playerTwo || !io.sockets.sockets.get(game.playerIds.playerTwo)) {
+      game.playerIds.playerTwo = socket.id;
+      playerKey = 'playerTwo';
+    } else {
+      if (typeof cb === 'function') cb({ ok: false, message: 'Game full' });
+      return;
+    }
+
+    // After assigning playerKey and updating game.playerIds...
+
+    // If currentPlayer is not a connected socket, and it matches the previous socket for this player, update to new socket.id
+    if (
+      game.currentPlayer &&
+      !io.sockets.sockets.get(game.currentPlayer) &&
+      (
+        (playerKey === 'playerOne' && game.currentPlayer !== game.playerIds.playerOne) ||
+        (playerKey === 'playerTwo' && game.currentPlayer !== game.playerIds.playerTwo)
+      )
+    ) {
+      // If the disconnected currentPlayer was this player, update to new socket.id
+      game.currentPlayer = socket.id;
+    }
+
     socket.join(code);
-    socketMap[socket.id] = { gameCode: code, playerKey: 'playerTwo' };
+    socketMap[socket.id] = { gameCode: code, playerKey };
 
-    if (game.deck.length < 12) {
-      game.deck = shuffle(getFullDeck());
+    // --- FIX: If currentPlayer is not a connected socket, assign to whoever just joined/rejoined ---
+    const validPlayerIds = [game.playerIds.playerOne, game.playerIds.playerTwo];
+    const currentPlayerConnected = game.currentPlayer && io.sockets.sockets.get(game.currentPlayer);
+
+    if (!currentPlayerConnected || !validPlayerIds.includes(game.currentPlayer)) {
+      game.currentPlayer = socket.id;
     }
 
+    // If game already started, just send current state
+    if (game.playerHands.playerOne.length && game.playerHands.playerTwo.length && game.tableCards.length) {
+      if (game.currentPlayer === socket.id) {
+        socket.emit('your turn', {
+          ...game,
+          hand: game.playerHands[playerKey],
+          table: game.tableCards,
+          opponentCards: game.playerHands[playerKey === 'playerOne' ? 'playerTwo' : 'playerOne'].length,
+          gameCode: code
+        });
+      } else {
+        socket.emit('wait', {
+          ...game,
+          hand: game.playerHands[playerKey],
+          table: game.tableCards,
+          opponentCards: game.playerHands[playerKey === 'playerOne' ? 'playerTwo' : 'playerOne'].length,
+          gameCode: code
+        });
+      }
+
+      // Also update the other player
+      const otherKey = playerKey === 'playerOne' ? 'playerTwo' : 'playerOne';
+      const otherId = game.playerIds[otherKey];
+      if (otherId) {
+        if (game.currentPlayer === otherId) {
+          io.to(otherId).emit('your turn', {
+            ...game,
+            hand: game.playerHands[otherKey],
+            table: game.tableCards,
+            opponentCards: game.playerHands[playerKey].length,
+            gameCode: code
+          });
+        } else {
+          io.to(otherId).emit('wait', {
+            ...game,
+            hand: game.playerHands[otherKey],
+            table: game.tableCards,
+            opponentCards: game.playerHands[playerKey].length,
+            gameCode: code
+          });
+        }
+      }
+
+      if (typeof cb === 'function') cb({ ok: true, code });
+      io.to(code).emit('joined', { message: 'Both players connected', code });
+      return;
+    }
+
+    // If game not started, deal hands and table
     game.playerHands.playerOne = game.deck.slice(0, 4);
     game.playerHands.playerTwo = game.deck.slice(4, 8);
     game.tableCards = game.deck.slice(8, 12).map(cardArr => ({
@@ -113,7 +189,6 @@ io.on('connection', (socket) => {
       gameCode: code
     });
 
-    console.log(`Player ${socket.id} joined game ${code}`);
     if (typeof cb === 'function') cb({ ok: true, code });
     io.to(code).emit('joined', { message: 'Both players connected', code });
   });
@@ -261,7 +336,7 @@ io.on('connection', (socket) => {
             ...game,
             hand: game.playerHands.playerTwo,
             table: game.tableCards,
-            opponentCards: game.playerHands.playerOne.length,
+            opponentCards: game.playerHands[playerKey].length,
             gameCode
           });
           return;
@@ -323,14 +398,22 @@ io.on('connection', (socket) => {
       io.to(otherPlayerId).emit('opponent disconnected', { message: 'Opponent disconnected' });
     }
 
-    try {
+    // --- CLEAN UP GAME IF BOTH PLAYERS HAVE LEFT ---
+    const playerOneConnected = game.playerIds.playerOne && io.sockets.sockets.get(game.playerIds.playerOne);
+    const playerTwoConnected = game.playerIds.playerTwo && io.sockets.sockets.get(game.playerIds.playerTwo);
+
+    if (!playerOneConnected && !playerTwoConnected) {
+      console.log(`Deleting game ${gameCode} (both players disconnected)`);
       delete games[gameCode];
+      // Clean up socketMap for both players
       if (game.playerIds.playerOne) delete socketMap[game.playerIds.playerOne];
       if (game.playerIds.playerTwo) delete socketMap[game.playerIds.playerTwo];
-    } catch (err) {
-      console.error('Error cleaning game:', err);
     }
+
+    // Clean up mapping for this socket
+    delete socketMap[socket.id];
   });
+
 
 });
 
