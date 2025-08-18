@@ -418,4 +418,10 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+  res.send('Tableen Backend Up and Running!');
+});
+
+
 server.listen(PORT, () => console.log(`Server started!`));
