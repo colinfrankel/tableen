@@ -33,8 +33,14 @@ function showStatusModal(msg) {
 let draggedCard = null;
 let draggedTableCard = null;
 let currentGameCode = null;
-// let socket = io("http://localhost:3000");
-let socket = io("https://tabline.onrender.com");
+
+let socket;
+
+if (location.hostname === "localhost") {
+  socket = io("http://localhost:3000");
+} else {
+  socket = io("https://tabline.onrender.com");
+}
 
 // UI elements
 const createBtn = document.getElementById('createBtn');
