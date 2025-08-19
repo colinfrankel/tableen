@@ -36,7 +36,7 @@ let currentGameCode = null;
 
 let socket;
 console.log(window.location);
-if (window.location.startsWith('file://')) {
+if (window.location.toString().startsWith('file://')) {
   socket = io("http://localhost:3000");
 } else {
   socket = io("https://tabline.onrender.com");
