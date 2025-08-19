@@ -35,8 +35,8 @@ let draggedTableCard = null;
 let currentGameCode = null;
 
 let socket;
-
-if (location.hostname === "localhost") {
+console.log(window.location);
+if (window.location.startsWith('file://')) {
   socket = io("http://localhost:3000");
 } else {
   socket = io("https://tabline.onrender.com");
