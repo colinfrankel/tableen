@@ -35,7 +35,7 @@ let draggedTableCard = null;
 let currentGameCode = null;
 
 let socket;
-console.log(window.location);
+
 if (window.location.toString().startsWith('file://')) {
   socket = io("http://localhost:3000");
 } else {
