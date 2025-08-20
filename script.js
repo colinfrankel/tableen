@@ -1,3 +1,8 @@
+document.addEventListener('DOMContentLoaded', () => {
+  const joinCodeInput = document.getElementById('joinCode');
+  if (joinCodeInput) joinCodeInput.value = '';
+});
+
 // Modal logic
 function showStackChoiceModal(message, onChoice, btn1Label = "Stack", btn2Label = "Sum") {
   const overlay = document.getElementById('modalOverlay');
@@ -204,7 +209,7 @@ socket.on('opponent action', (data) => {
     }
     // If stacking onto a multi-card stack, show all cards
     else if (data.stackCards && data.stackCards.length > 1) {
-      const stackCardsText = data.stackCards.map(miniCardText(data.playedCard)).pop().join(', ');
+      const stackCardsText = data.stackCards.map(miniCardText).join(', ');
       actionText = `Stacked ${miniCardText(data.playedCard)} on stack ${stackCardsText}`;
       if (data.stackAsSum) actionText += ' (as sum)';
     }
