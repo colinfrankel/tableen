@@ -33,7 +33,11 @@ function shuffle(array) {
 }
 
 function makeCode(length = 5) {
-  return Math.random().toString(36).substr(2, length).toUpperCase();
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += Math.floor(Math.random() * 10); // random digit 0-9
+  }
+  return code;
 }
 
 const games = {};

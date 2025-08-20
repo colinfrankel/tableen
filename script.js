@@ -68,10 +68,16 @@ joinBtn.addEventListener('click', () => {
   });
 });
 
+joinCodeInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    joinBtn.click();
+  }
+});
+
 function showGameCode(code) {
   gameCodeSpan.innerText = code;
   gameCodeBox.classList.remove('hidden');
-  lobbyStatus.innerText = `In game ${code}`;
+  document.getElementById('debugInfo').classList.remove('hidden');
 }
 
 // socket events
@@ -82,7 +88,7 @@ socket.on('connect', () => {
 socket.on('game created', ({ code }) => {
   currentGameCode = code;
   showGameCode(code);
-  lobbyStatus.innerText = `Game ${code} created — waiting for other player...`;
+  lobbyStatus.innerText = `Waiting for other player...`;
   document.getElementById('gameStartOptions').classList.add('hidden');
   updateDebugInfo({ gameCode: currentGameCode });
 

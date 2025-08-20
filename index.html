@@ -12,7 +12,7 @@
 </head>
 
 <body>
-  <div id="debugInfo" class="debug-info"></div>
+  <div id="debugInfo" class="debug-info hidden"></div>
   <a id="bugReport" href="https://github.com/niloc3/tableen/issues?q=is%3Aissue" target="_blank">Report a Bug</a>
   <header>
     <div id="opponentLastAction"
@@ -27,13 +27,13 @@
         </div>
         <div class="divider">OR</div>
         <div id="joinContainer">
-          <input id="joinCode" placeholder="Enter game code" maxlength="8" />
+          <input id="joinCode" placeholder="Enter Game Code" maxlength="5" />
           <button id="joinBtn">Join Game</button>
         </div>
       </div>
 
       <div id="gameCodeBox" class="hidden">
-        Your Game Code: <strong><span id="gameCode"></span></strong>
+        Your Game Code: <span id="gameCode"></span>
       </div>
       <div id="lobbyStatus"></div>
     </div>
