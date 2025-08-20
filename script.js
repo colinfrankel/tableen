@@ -204,7 +204,7 @@ socket.on('opponent action', (data) => {
     }
     // If stacking onto a multi-card stack, show all cards
     else if (data.stackCards && data.stackCards.length > 1) {
-      const stackCardsText = data.stackCards.map(miniCardText).pop().join(', ');
+      const stackCardsText = data.stackCards.map(miniCardText(data.playedCard)).pop().join(', ');
       actionText = `Stacked ${miniCardText(data.playedCard)} on stack ${stackCardsText}`;
       if (data.stackAsSum) actionText += ' (as sum)';
     }

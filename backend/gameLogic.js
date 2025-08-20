@@ -30,8 +30,6 @@ function validateAndApplyAction(gameState, action, playerKey) {
     const playedCard = action.playedCard;
     if (!playedCard) return { error: 'No card played.' };
 
-    // Remove card from hand
-    removeCardFromHand(gameState, playerKey, playedCard);
 
     // If stacking as sum
     if (action.stackAsSum) {
@@ -39,6 +37,11 @@ function validateAndApplyAction(gameState, action, playerKey) {
       const playedCardValueForSum = playedCard.card === 14 ? 1 : playedCard.card;
       const sum = stack.cards.reduce((acc, c) => acc + (c.card === 14 ? 1 : c.card), 0) + playedCardValueForSum;
       if (sum > 14) return { error: 'Cannot create a stack above 14.' };
+      // if player doesnt have sum in hand return error
+      const hasSumInHand = gameState.playerHands[playerKey].some(arr => {
+        return arr[0].card === sum;
+      });
+      if (!hasSumInHand) return { error: 'You do not have the required card to create this stack.' };
       stack.cards.push(playedCard);
       stack.stackNumber = sum;
       return { newState: gameState };
@@ -55,6 +58,10 @@ function validateAndApplyAction(gameState, action, playerKey) {
     // Otherwise, reject if sum > 14
     const sum = stack.cards.reduce((acc, c) => acc + c.card, 0) + playedCard.card;
     if (sum > 14) return { error: 'Cannot create a stack above 14.' };
+    const hasSumInHand = gameState.playerHands[playerKey].some(arr => {
+      return arr[0].card === sum
+    });
+    if (!hasSumInHand) return { error: 'You do not have the required card to create this stack.' };
     stack.cards.push(playedCard);
     stack.stackNumber = sum;
 
@@ -72,6 +79,9 @@ function validateAndApplyAction(gameState, action, playerKey) {
         s => s.id === thisStackId || s.stackNumber !== thisStackNumber
       );
     }
+
+    
+    removeCardFromHand(gameState, playerKey, playedCard);
 
     return { newState: gameState };
   }
