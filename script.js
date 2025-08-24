@@ -564,9 +564,14 @@ function updateTableCards(tableCards, playerHand = []) {
         }
 
         // If card value matches stack sum and player has more than one of that card, prompt for grab/stack
-        const stackSum = stackObj.stackNumber;
-        if (draggedCard.card === stackSum) {
-          const numStackSumInHand = playerHand.filter(arr => arr[0].card === stackSum).length;
+        if (
+          draggedCard.card === stackSum ||
+          (isAce(draggedCard.card) && (stackSum === 1 || stackSum === 14))
+        ) {
+          const numStackSumInHand = playerHand.filter(arr =>
+            arr[0].card === stackSum ||
+            (isAce(arr[0].card) && (stackSum === 1 || stackSum === 14))
+          ).length;
           if (numStackSumInHand > 1) {
             showStackChoiceModal(`Continue to stack <code>${stackSum}s</code> or just grab it?`, (choice) => {
               if (choice === 'stack') {

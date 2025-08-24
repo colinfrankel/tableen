@@ -39,7 +39,10 @@ function validateAndApplyAction(gameState, action, playerKey) {
       if (sum > 14) return { error: 'Cannot create a stack above 14.' };
       // if player doesnt have sum in hand return error
       const hasSumInHand = gameState.playerHands[playerKey].some(arr => {
-        return arr[0].card === sum;
+        // Ace weirdness: treat 1 and 14 as equivalent for sum
+        return arr[0].card === sum ||
+          (sum === 1 && arr[0].card === 14) ||
+          (sum === 14 && arr[0].card === 1);
       });
       if (!hasSumInHand) return { error: 'You do not have the required card to create this stack.' };
       stack.cards.push(playedCard);
@@ -61,7 +64,10 @@ function validateAndApplyAction(gameState, action, playerKey) {
     const sum = stack.cards.reduce((acc, c) => acc + c.card, 0) + playedCard.card;
     if (sum > 14) return { error: 'Cannot create a stack above 14.' };
     const hasSumInHand = gameState.playerHands[playerKey].some(arr => {
-      return arr[0].card === sum
+      // Ace weirdness: treat 1 and 14 as equivalent for sum
+      return arr[0].card === sum ||
+        (sum === 1 && arr[0].card === 14) ||
+        (sum === 14 && arr[0].card === 1);
     });
     if (!hasSumInHand) return { error: 'You do not have the required card to create this stack.' };
     stack.cards.push(playedCard);
