@@ -322,10 +322,10 @@ io.on('connection', (socket) => {
           game.lastGrabber = null;
 
           // --- SWAP WHO STARTS EACH ROUND ---
-          if (!game.roundStarter || game.roundStarter === 'playerTwo') {
-            game.roundStarter = 'playerOne';
-          } else {
+          if (!game.roundStarter || game.roundStarter === 'playerOne') {
             game.roundStarter = 'playerTwo';
+          } else {
+            game.roundStarter = 'playerOne';
           }
           game.currentPlayer = game.playerIds[game.roundStarter];
 
