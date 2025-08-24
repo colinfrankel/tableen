@@ -329,20 +329,24 @@ io.on('connection', (socket) => {
           }
           game.currentPlayer = game.playerIds[game.roundStarter];
 
-          io.to(game.playerIds.playerOne).emit('your turn', {
-            ...game,
-            hand: game.playerHands.playerOne,
-            table: game.tableCards,
-            opponentCards: game.playerHands.playerTwo.length,
-            gameCode
-          });
-          io.to(game.playerIds.playerTwo).emit('wait', {
-            ...game,
-            hand: game.playerHands.playerTwo,
-            table: game.tableCards,
-            opponentCards: game.playerHands[playerKey].length,
-            gameCode
-          });
+          io.to(game.playerIds.playerOne).emit(
+            game.currentPlayer === game.playerIds.playerOne ? 'your turn' : 'wait',
+            {
+              ...game,
+              hand: game.playerHands.playerOne,
+              table: game.tableCards,
+              opponentCards: game.playerHands.playerTwo.length,
+              gameCode
+            });
+          io.to(game.playerIds.playerTwo).emit(
+            game.currentPlayer === game.playerIds.playerTwo ? 'your turn' : 'wait',
+            {
+              ...game,
+              hand: game.playerHands.playerTwo,
+              table: game.tableCards,
+              opponentCards: game.playerHands[playerKey].length,
+              gameCode
+            });
           return;
         }
       }
