@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const joinCodeInput = document.getElementById('joinCode');
   if (joinCodeInput) joinCodeInput.value = '';
+  initProfileAndTheme();
 });
 
 // Modal logic
@@ -299,6 +300,18 @@ socket.on('round over', (data) => {
   html += `<b>Opponent's Tableens:</b> ${data.opponentTableens || 0}<br>`;
 
   showStatusModal(`${data.message}<br><br>${html}`);
+
+  // Update local profile stats
+  try {
+    const p = getProfile() || { name: 'Player', games: 0, wins: 0, theme: 'dark', accent: '#0a84ff' };
+    p.games = (p.games || 0) + 1;
+    const msg = (data.message || '').toLowerCase();
+    if (msg.includes('you win') || msg.includes('you won') || msg.includes('you take the round')) {
+      p.wins = (p.wins || 0) + 1;
+    }
+    saveProfile(p);
+    updateUserBadge(p);
+  } catch {}
 });
 
 socket.on('opponent disconnected', (data) => {
@@ -793,4 +806,99 @@ function updateDebugInfo({ gameCode, extra }) {
     <b>Game Code:</b> ${lastDebugGameCode || '—'}<br>
     ${extra ? `<div>${extra}</div>` : ''}
   `;
+}
+
+// Profile & Theme persistence
+const PROFILE_KEY = 'tableen:profile';
+function getProfile() {
+  try { return JSON.parse(localStorage.getItem(PROFILE_KEY)) || null; } catch { return null; }
+}
+function saveProfile(p) { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); }
+function applyTheme(theme, accent) {
+  document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
+  if (accent) document.documentElement.style.setProperty('--accent', accent);
+}
+function updateUserBadge(profile) {
+  const badge = document.getElementById('userBadge');
+  if (!badge) return;
+  const nameEl = document.getElementById('userName');
+  const statsEl = document.getElementById('userStats');
+  if (!profile) { badge.classList.add('hidden'); return; }
+  nameEl.textContent = profile.name || 'Player';
+  const games = profile.games || 0;
+  const wins = profile.wins || 0;
+  const pct = games ? Math.round((wins / games) * 100) : 0;
+  statsEl.textContent = `${wins}W • ${games}G • ${pct}%`;
+  badge.classList.remove('hidden');
+}
+function initProfileAndTheme() {
+  const existing = getProfile();
+  const overlay = document.getElementById('welcomeOverlay');
+  const nameInput = document.getElementById('playerNameInput');
+  const accentPicker = document.getElementById('accentPicker');
+  const swatches = document.getElementById('accentSwatches');
+  const saveBtn = document.getElementById('saveWelcome');
+  const themeInputs = document.querySelectorAll('input[name="theme"]');
+
+  function setThemePreview() {
+    const selectedTheme = [...themeInputs].find(r => r.checked)?.value || 'dark';
+    const acc = accentPicker?.value || '#0a84ff';
+    applyTheme(selectedTheme, acc);
+  }
+
+  const openSettings = document.getElementById('openSettings');
+  if (openSettings) {
+    openSettings.addEventListener('click', () => {
+      const p = getProfile() || { name: '', theme: 'dark', accent: '#0a84ff', games: 0, wins: 0 };
+      if (nameInput) nameInput.value = p.name || '';
+      if (accentPicker) accentPicker.value = p.accent || '#0a84ff';
+      themeInputs.forEach(r => r.checked = (r.value === (p.theme || 'dark')));
+      setThemePreview();
+      overlay?.classList.remove('hidden');
+    });
+  }
+
+  if (swatches) {
+    swatches.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-color]');
+      if (!btn || !accentPicker) return;
+      accentPicker.value = btn.dataset.color;
+      setThemePreview();
+    });
+  }
+  accentPicker?.addEventListener('input', setThemePreview);
+  themeInputs.forEach(r => r.addEventListener('change', setThemePreview));
+
+  if (existing && existing.name) {
+    applyTheme(existing.theme || 'dark', existing.accent || '#0a84ff');
+    updateUserBadge(existing);
+  } else {
+    overlay?.classList.remove('hidden');
+    setThemePreview();
+  }
+
+  saveBtn?.addEventListener('click', () => {
+    const name = (nameInput?.value || '').trim().slice(0, 18) || 'Player';
+    const theme = [...themeInputs].find(r => r.checked)?.value || 'dark';
+    const accent = accentPicker?.value || '#0a84ff';
+    const base = getProfile() || { games: 0, wins: 0 };
+    const profile = { ...base, name, theme, accent };
+    saveProfile(profile);
+    applyTheme(theme, accent);
+    updateUserBadge(profile);
+    overlay?.classList.add('hidden');
+  });
+}
+
+// Hook into opponent card rendering to add accent overlay class if possible
+const _origUpdateGameUI = typeof updateGameUI === 'function' ? updateGameUI : null;
+if (_origUpdateGameUI) {
+  window.updateGameUI = function(data, isYourTurn) {
+    _origUpdateGameUI.call(this, data, isYourTurn);
+    // After base render, add accent class to opponent backs
+    document.querySelectorAll('#opponentCards img').forEach(img => {
+      const src = img.getAttribute('src') || '';
+      if (src.includes('cardback')) img.classList.add('opponent-back');
+    });
+  }
 }

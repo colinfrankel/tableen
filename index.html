@@ -6,6 +6,7 @@
 
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Online Tableen</title>
   <link href="./style.css" rel="stylesheet" />
   <link rel="icon" href="./favicon.ico" />
@@ -15,6 +16,13 @@
   <div id="debugInfo" class="debug-info hidden"></div>
   <a id="bugReport" href="https://github.com/niloc3/tableen/issues?q=is%3Aissue" target="_blank">Report a Bug</a>
   <header>
+    <div id="userArea">
+      <div id="userBadge" class="hidden">
+        <span id="userName"></span>
+        <span id="userStats"></span>
+      </div>
+      <button id="openSettings" title="Settings" aria-label="Settings">⚙️</button>
+    </div>
     <div id="opponentLastAction" class="hidden"
       style="position:fixed;top:12px;left:12px;z-index:2000;background:#fffbe7;border:1px solid #ccc;padding:8px 14px;border-radius:8px;box-shadow:0 2px 8px #0002;font-size:1.1em;min-width:120px;max-width:320px;">
     </div>
@@ -51,18 +59,55 @@
     </div>
   </main>
 
+  <!-- Welcome/Settings Modal -->
+  <div id="welcomeOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+    <div class="modal modal-welcome">
+      <h2 id="welcomeTitle">Welcome to Tableen</h2>
+      <p class="sub">Set up your profile to get started</p>
+      <div class="welcome-row">
+        <label for="playerNameInput">Your name</label>
+        <input id="playerNameInput" type="text" maxlength="18" placeholder="e.g., AceChaser" autocomplete="off" />
+      </div>
+      <div class="welcome-row">
+        <label>Theme</label>
+        <div class="theme-options">
+          <label class="theme-pill"><input type="radio" name="theme" value="dark" checked> <span>Dark</span></label>
+          <label class="theme-pill"><input type="radio" name="theme" value="light"> <span>Light</span></label>
+        </div>
+      </div>
+      <div class="welcome-row">
+        <label for="accentPicker">Accent color</label>
+        <div class="accent-picker">
+          <input id="accentPicker" type="color" value="#0a84ff" />
+          <div class="swatches" id="accentSwatches" aria-label="Quick accent colors">
+            <button data-color="#0a84ff" style="--sw: #0a84ff" title="Blue"></button>
+            <button data-color="#ff3b30" style="--sw: #ff3b30" title="Red"></button>
+            <button data-color="#34c759" style="--sw: #34c759" title="Green"></button>
+            <button data-color="#ff9f0a" style="--sw: #ff9f0a" title="Orange"></button>
+            <button data-color="#af52de" style="--sw: #af52de" title="Purple"></button>
+            <button data-color="#64d2ff" style="--sw: #64d2ff" title="Cyan"></button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button id="saveWelcome">Save & Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for stack choice -->
+  <div id="modalOverlay" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-message" id="modalMessage"></div>
+      <div class="modal-buttons">
+        <button id="modalOption1">Stack as two cards</button>
+        <button id="modalOption2">Stack as sum</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
   <script src="script.js" defer></script>
 </body>
-<!-- Modal for stack choice -->
-<div id="modalOverlay" class="modal-overlay hidden">
-  <div class="modal">
-    <div class="modal-message" id="modalMessage"></div>
-    <div class="modal-buttons">
-      <button id="modalOption1">Stack as two cards</button>
-      <button id="modalOption2">Stack as sum</button>
-    </div>
-  </div>
-</div>
 
 </html>

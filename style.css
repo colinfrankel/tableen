@@ -1,25 +1,55 @@
 /* Root color variables */
 :root {
-  --color-bg: #020e1c;
-  --color-bg-light: #041930;
-  --color-border: #fff;
-  --color-stack-border: #ddd;
-  --color-stack-bg: #041930;
-  --color-modal-bg: #fff;
-  --color-modal-text: #222;
-  --color-modal-shadow: rgba(0,0,0,0.3);
-  --color-btn-bg: #0a3d91;
-  --color-btn-bg-hover: #1761c7;
+  --accent: #0a84ff;
+  --radius: 12px;
+
+  /* Dark theme defaults */
+  --color-bg: #050b16;
+  --color-bg-light: #0c1629;
+  --color-border: #e9eef5;
+  --color-muted: #9fb0c8;
+  --color-stack-border: #2b3b58;
+  --color-stack-bg: #0c1629;
+  --color-modal-bg: #0f1b31;
+  --color-modal-text: #e9eef5;
+  --color-modal-shadow: rgba(0,0,0,0.45);
+  --color-btn-bg: color-mix(in oklab, var(--accent) 85%, black);
+  --color-btn-bg-hover: color-mix(in oklab, var(--accent) 70%, black);
   --color-btn-text: #fff;
-  --color-card-border: #ddd;
-  --color-card-shadow: rgba(0, 0, 0, 0.2);
-  --color-debug-bg: rgba(107, 107, 107, 0.45);
-  --color-debug-text: #fff;
-  --color-stack-number: #fff;
-  --color-stack-number-shadow: rgba(0, 0, 0, 0.5);
-  --color-mini-card-border: #000;
-  --color-mini-card-bg: #fff;
-  --color-mini-card-text: #222;
+  --color-card-border: #2b3b58;
+  --color-card-shadow: rgba(0, 0, 0, 0.3);
+  --color-debug-bg: rgba(17, 28, 48, 0.8);
+  --color-debug-text: #e9eef5;
+  --color-stack-number: #e9eef5;
+  --color-stack-number-shadow: rgba(0, 0, 0, 0.6);
+  --color-mini-card-border: #2b3b58;
+  --color-mini-card-bg: #0f1b31;
+  --color-mini-card-text: #e9eef5;
+}
+
+/* Light theme overrides */
+:root[data-theme="light"] {
+  --color-bg: #f6f8fb;
+  --color-bg-light: #ffffff;
+  --color-border: #0c1629;
+  --color-muted: #4b5a74;
+  --color-stack-border: #d7dfeb;
+  --color-stack-bg: #ffffff;
+  --color-modal-bg: #ffffff;
+  --color-modal-text: #0c1629;
+  --color-modal-shadow: rgba(0,0,0,0.15);
+  --color-btn-bg: color-mix(in oklab, var(--accent) 70%, white);
+  --color-btn-bg-hover: color-mix(in oklab, var(--accent) 85%, white);
+  --color-btn-text: #0c1629;
+  --color-card-border: #d7dfeb;
+  --color-card-shadow: rgba(0, 0, 0, 0.08);
+  --color-debug-bg: rgba(255,255,255,0.85);
+  --color-debug-text: #0c1629;
+  --color-stack-number: #0c1629;
+  --color-stack-number-shadow: rgba(255,255,255,0.5);
+  --color-mini-card-border: #cbd6e6;
+  --color-mini-card-bg: #ffffff;
+  --color-mini-card-text: #0c1629;
 }
 
 /* General styles */
@@ -34,6 +64,43 @@ html, body {
 header {
   padding: 12px;
   text-align: center;
+}
+
+#userArea {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#openSettings {
+  background: transparent;
+  border: 1px solid var(--color-stack-border);
+  color: var(--color-border);
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+#openSettings:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#userBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-stack-border);
+  background: var(--color-bg-light);
+  border-radius: 999px;
+}
+#userBadge #userName {
+  font-weight: 700;
+}
+#userBadge #userStats {
+  color: var(--color-muted);
+  font-size: 0.9em;
 }
 
 .container {
@@ -51,10 +118,10 @@ header {
   gap: 1em;
 }
 
-#createBtn, #joinBtn {
+.pill-btn, #createBtn, #joinBtn, .modal-buttons button {
   padding: 0.5em 1.5em;
   font-size: 1em;
-  border-radius: 6px;
+  border-radius: var(--radius);
   border: none;
   background: var(--color-btn-bg);
   color: var(--color-btn-text);
@@ -62,18 +129,18 @@ header {
   transition: background 0.2s;
 }
 
-#createBtn:hover, #joinBtn:hover {
+#createBtn:hover, #joinBtn:hover, .modal-buttons button:hover {
   background: var(--color-btn-bg-hover);
 }
 
 #joinCode {
   padding: 0.5em;
   font-size: 1em;
-  border-radius: 6px;
+  border-radius: var(--radius);
   border: 1px solid var(--color-stack-border);
   width: 200px;
   background-color: transparent;
-  color: #fff
+  color: var(--color-border);
 }
 
 #createContainer, #joinContainer {
@@ -101,7 +168,7 @@ header {
 #gameCodeBox span {
   padding: 10px;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--color-bg-light);
   font-size: 1.4em;
   letter-spacing: 5px;
@@ -140,7 +207,7 @@ header {
   margin: 5px;
   cursor: grab;
   border: 1px solid var(--color-card-border);
-  border-radius: 8px;
+  border-radius: calc(var(--radius) - 2px);
   box-shadow: 0px 4px 6px var(--color-card-shadow);
 }
 
@@ -152,7 +219,7 @@ header {
 #tableCards {
   background-color: var(--color-stack-bg);
   border: 2px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 40px 40px 20px 40px;
   min-width: 400px;
   min-height: 160px;
@@ -174,7 +241,7 @@ header {
   z-index: calc(var(--stack-index));
   box-shadow: 0px 4px 6px var(--color-card-shadow);
   border: 1px solid var(--color-card-border);
-  border-radius: 8px;
+  border-radius: calc(var(--radius) - 2px);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
@@ -203,7 +270,7 @@ header {
 .modal {
   background: var(--color-modal-bg);
   color: var(--color-modal-text);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 1em 1.2em;
   box-shadow: 0 8px 32px var(--color-modal-shadow);
   min-width: 260px;
@@ -214,6 +281,73 @@ header {
   font-size: 1em;
 }
 
+.modal-welcome h2 {
+  margin: 0.2em 0 0.1em 0;
+}
+.modal-welcome .sub {
+  margin: 0 0 1em 0;
+  color: var(--color-muted);
+}
+.welcome-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin: 10px 0;
+  text-align: left;
+}
+.welcome-row input[type="text"] {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-stack-border);
+  background: var(--color-bg-light);
+  color: var(--color-border);
+}
+.theme-options {
+  display: flex;
+  gap: 8px;
+}
+.theme-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--color-stack-border);
+  background: var(--color-bg-light);
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.theme-pill input { accent-color: var(--accent); }
+
+.accent-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.accent-picker input[type="color"] {
+  width: 42px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-stack-border);
+  background: transparent;
+  border-radius: 8px;
+}
+.accent-picker .swatches {
+  display: flex;
+  gap: 8px;
+}
+.accent-picker .swatches button {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #fff8;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  background: var(--sw);
+  cursor: pointer;
+}
+.accent-picker .swatches button:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
 /* Make card summaries wrap nicely */
 .modal p {
   margin: 0.5em 0 0.2em 0;
@@ -222,20 +356,7 @@ header {
 .modal-buttons {
   margin-top: 1.5em;
 }
-.modal-buttons button {
-  margin: 0 1em;
-  padding: 0.5em 1.5em;
-  font-size: 1em;
-  border-radius: 6px;
-  border: none;
-  background: var(--color-btn-bg);
-  color: var(--color-btn-text);
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.modal-buttons button:hover {
-  background: var(--color-btn-bg-hover);
-}
+.modal-buttons { display: flex; justify-content: center; gap: 12px; }
 
 .debug-info {
   position: fixed;
@@ -270,11 +391,26 @@ header {
   position: absolute;
   bottom: 10px;
   right: 10px;
-  color: white;
+  color: var(--color-btn-text);
   padding: 5px 10px;
   border: 2px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   text-decoration: none;
   background-color: var(--color-btn-bg);
+}
+
+/* Opponent back card accent tint */
+.card.opponent-back {
+  filter: drop-shadow(0 6px 10px rgba(0,0,0,0.25));
+  position: relative;
+}
+.card.opponent-back::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 120% at 10% 10%, color-mix(in oklab, var(--accent) 45%, transparent), transparent 60%);
+  mix-blend-mode: color;
+  pointer-events: none;
 }
 
