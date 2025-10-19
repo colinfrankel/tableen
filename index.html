@@ -8,6 +8,19 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Online Tableen</title>
+  <script>
+    // Apply saved theme and accent before CSS loads to avoid color flash
+    (function(){
+      try {
+        var PROFILE_KEY = 'tableen:profile';
+        var p = JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null') || null;
+        var theme = (p && p.theme) || 'dark';
+        var accent = (p && p.accent) // default to purple
+        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.style.setProperty('--accent', accent);
+      } catch (e) {}
+    })();
+  </script>
   <link href="./style.css" rel="stylesheet" />
   <link rel="icon" href="./favicon.ico" />
 </head>

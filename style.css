@@ -4,27 +4,27 @@
   --radius: 12px;
 
   /* Dark theme defaults */
-  --color-bg: #050b16;
-  --color-bg-light: #0c1629;
-  --color-border: #e9eef5;
-  --color-muted: #9fb0c8;
-  --color-stack-border: #2b3b58;
-  --color-stack-bg: #0c1629;
-  --color-modal-bg: #0f1b31;
-  --color-modal-text: #e9eef5;
+  --color-bg: #0e0f12; /* neutral charcoal */
+  --color-bg-light: #16171a; /* slightly lighter neutral */
+  --color-border: #e8e8ea; /* off-white neutral */
+  --color-muted: #9a9aa0; /* neutral grey for secondary text */
+  --color-stack-border: #2a2d34; /* neutral dark border */
+  --color-stack-bg: #16171a; /* neutral background for table area */
+  --color-modal-bg: #1b1d22; /* neutral modal surface */
+  --color-modal-text: #e8e8ea;
   --color-modal-shadow: rgba(0,0,0,0.45);
-  --color-btn-bg: color-mix(in oklab, var(--accent) 85%, black);
-  --color-btn-bg-hover: color-mix(in oklab, var(--accent) 70%, black);
+  --color-btn-bg: color-mix(in oklab, var(--accent) 85%, #1a1a1a);
+  --color-btn-bg-hover: color-mix(in oklab, var(--accent) 70%, #1a1a1a);
   --color-btn-text: #fff;
-  --color-card-border: #2b3b58;
+  --color-card-border: #2a2d34;
   --color-card-shadow: rgba(0, 0, 0, 0.3);
-  --color-debug-bg: rgba(17, 28, 48, 0.8);
-  --color-debug-text: #e9eef5;
-  --color-stack-number: #e9eef5;
+  --color-debug-bg: rgba(18, 18, 18, 0.85);
+  --color-debug-text: #e8e8ea;
+  --color-stack-number: #e8e8ea;
   --color-stack-number-shadow: rgba(0, 0, 0, 0.6);
-  --color-mini-card-border: #2b3b58;
-  --color-mini-card-bg: #0f1b31;
-  --color-mini-card-text: #e9eef5;
+  --color-mini-card-border: #2a2d34;
+  --color-mini-card-bg: #1b1d22;
+  --color-mini-card-text: #e8e8ea;
 }
 
 /* Light theme overrides */
