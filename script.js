@@ -1,19 +1,21 @@
 document.addEventListener('DOMContentLoaded', () => {
   const joinCodeInput = document.getElementById('joinCode');
   if (joinCodeInput) joinCodeInput.value = '';
-  initProfileAndTheme();
+  bootstrapUserFlow();
+  console.log('Tableen script loaded');
 });
 
 // Modal logic
 function showStackChoiceModal(message, onChoice, btn1Label = "Stack", btn2Label = "Sum") {
   const overlay = document.getElementById('modalOverlay');
-  const msg = document.getElementById('modalMessage');
-  const btns = document.querySelector('.modal-buttons');
+  if (!overlay) return;
+  const msg = overlay.querySelector('#modalMessage');
+  const btns = overlay.querySelector('.modal-buttons');
   msg.innerHTML = message || 'Stack as two cards or as a single sum?';
   overlay.classList.remove('hidden');
   btns.innerHTML = `<button id="modalOption1">${btn1Label}</button><button id="modalOption2">${btn2Label}</button>`;
-  const btn1 = document.getElementById('modalOption1');
-  const btn2 = document.getElementById('modalOption2');
+  const btn1 = overlay.querySelector('#modalOption1');
+  const btn2 = overlay.querySelector('#modalOption2');
   function cleanup() {
     overlay.classList.add('hidden');
     btn1.removeEventListener('click', asOne);
@@ -28,12 +30,14 @@ function showStackChoiceModal(message, onChoice, btn1Label = "Stack", btn2Label 
 // Show status in a modal (replace alert)
 function showStatusModal(msg) {
   const overlay = document.getElementById('modalOverlay');
-  const msgDiv = document.getElementById('modalMessage');
-  const btns = document.querySelector('.modal-buttons');
+  if (!overlay) return;
+  const msgDiv = overlay.querySelector('#modalMessage');
+  const btns = overlay.querySelector('.modal-buttons');
   msgDiv.innerHTML = msg;
   overlay.classList.remove('hidden');
   btns.innerHTML = '<button id="modalOk">OK</button>';
-  document.getElementById('modalOk').onclick = () => overlay.classList.add('hidden');
+  const okBtn = overlay.querySelector('#modalOk');
+  if (okBtn) okBtn.onclick = () => overlay.classList.add('hidden');
 }
 
 let draggedCard = null;
@@ -301,22 +305,106 @@ socket.on('round over', (data) => {
 
   showStatusModal(`${data.message}<br><br>${html}`);
 
-  // Update local profile stats
-  try {
-    const p = getProfile() || { name: 'Player', games: 0, wins: 0, theme: 'dark', accent: '#0a84ff' };
-    p.games = (p.games || 0) + 1;
-    const msg = (data.message || '').toLowerCase();
-    if (msg.includes('you win') || msg.includes('you won') || msg.includes('you take the round')) {
-      p.wins = (p.wins || 0) + 1;
-    }
-    saveProfile(p);
-    updateUserBadge(p);
-  } catch {}
+  // Stats update now handled globally after 'round over' via Firestore; UI badge updates when data reloads
+  try {} catch {}
 });
 
-socket.on('opponent disconnected', (data) => {
-  updateDebugInfo({ extra: "Opponent disconnected!" });
-});
+// Toasts & loader helpers
+function showToast(message, type = 'info', timeout = 2500){
+  const c = document.getElementById('toasts');
+  if (!c) return;
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = message;
+  c.appendChild(el);
+  setTimeout(() => { el.remove(); }, timeout);
+}
+function setLoading(active, text){
+  const ld = document.getElementById('globalLoader');
+  if (!ld) return;
+  if (text) ld.textContent = text;
+  ld.classList.toggle('hidden', !active);
+}
+
+// --- Firestore helpers for user sync ---
+function getFS(){ return (window._firestore) || (window.firebase && firebase.firestore && firebase.firestore()) || null; }
+function getAuth(){ return (window.firebase && firebase.auth && firebase.auth()) || null; }
+async function waitForUid(){
+  const auth = getAuth();
+  if (!auth) return null;
+  if (auth.currentUser && auth.currentUser.uid) return auth.currentUser.uid;
+  return new Promise(resolve => {
+    const un = auth.onAuthStateChanged(u => { un(); resolve(u ? u.uid : null); });
+  });
+}
+async function getUserDoc(uid){
+  const db = getFS(); if (!db) return null;
+  try { const snap = await db.collection('users').doc(uid).get(); return snap.exists ? (snap.data()||null) : null; } catch { return null; }
+}
+async function upsertUserDoc(uid, data){
+  const db = getFS(); if (!db) return;
+  try { await db.collection('users').doc(uid).set({ ...data, updatedAt: Date.now() }, { merge: true }); } catch {}
+}
+async function findUserByName(name){
+  const db = getFS(); if (!db) return null;
+  const n = (name||'').trim(); if (!n) return null;
+  try {
+    console.log('Querying for user by name:', n);
+    const q = await db.collection('users').where('name','==',n).get();
+    if (q.empty) {
+      console.log('No users found with that name.');
+      return null;
+    }
+    // Log all found docs
+    q.docs.forEach((doc, idx) => {
+      console.log(`User doc #${idx + 1}:`, doc.data());
+    });
+    // Return the most recently updated one
+    const doc = q.docs[0];
+    return doc.data()||null;
+  } catch (err) {
+    console.error('Error in findUserByName:', err);
+    return null;
+  }
+}
+async function incrementStats(winInc, gameInc){
+  const db = getFS(); const auth = getAuth(); if (!db || !auth || !auth.currentUser) return;
+  try {
+    await db.collection('users').doc(auth.currentUser.uid).set({
+      wins: firebase.firestore.FieldValue.increment(winInc||0),
+      games: firebase.firestore.FieldValue.increment(gameInc||0),
+      updatedAt: Date.now()
+    }, { merge: true });
+  } catch {}
+}
+
+let CURRENT_USER = null;
+
+// After a round ends, bump local counters and push to leaderboard
+(function attachRoundOver(){
+  if (!window.socket || !socket.on) return;
+  const origOn = socket.on.bind(socket);
+  socket.on = function(evt, handler){
+    if (evt !== 'round over') return origOn(evt, handler);
+    const wrapped = (data) => {
+      try { handler && handler(data); } finally {
+        try {
+          const msg = (data && data.message || '').toLowerCase();
+          let isWin = false;
+          if (msg.includes('you:') && msg.includes('opponent:')) {
+            const m = (data.message || '').match(/you:\s*(\d+)\s*points[\s\S]*opponent:\s*(\d+)\s*points/i);
+            if (m) { const yp = +m[1] || 0; const op = +m[2] || 0; if (yp > op) isWin = true; }
+          } else if (msg.includes('you win') || msg.includes('you won') || msg.includes('you take the round')) {
+            isWin = true;
+          }
+          incrementStats(isWin ? 1 : 0, 1);
+          showToast(isWin ? 'Win recorded!' : 'Game recorded', 'success');
+        } catch {}
+      }
+    };
+    return origOn(evt, wrapped);
+  };
+})();
 
 // drag/drop base handlers
 document.body.addEventListener('dragover', (e) => e.preventDefault());
@@ -809,11 +897,6 @@ function updateDebugInfo({ gameCode, extra }) {
 }
 
 // Profile & Theme persistence
-const PROFILE_KEY = 'tableen:profile';
-function getProfile() {
-  try { return JSON.parse(localStorage.getItem(PROFILE_KEY)) || null; } catch { return null; }
-}
-function saveProfile(p) { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); }
 function applyTheme(theme, accent) {
   document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
   if (accent) document.documentElement.style.setProperty('--accent', accent);
@@ -831,63 +914,153 @@ function updateUserBadge(profile) {
   statsEl.textContent = `${wins}W • ${games}G • ${pct}%`;
   badge.classList.remove('hidden');
 }
-function initProfileAndTheme() {
-  const existing = getProfile();
-  const overlay = document.getElementById('welcomeOverlay');
+async function bootstrapUserFlow() {
+  setLoading(true, 'Signing in…');
+  const entryOverlay = document.getElementById('entryOverlay');
+  const signInOverlay = document.getElementById('signInOverlay');
+  const welcomeOverlay = document.getElementById('welcomeOverlay');
   const nameInput = document.getElementById('playerNameInput');
   const accentPicker = document.getElementById('accentPicker');
   const swatches = document.getElementById('accentSwatches');
   const saveBtn = document.getElementById('saveWelcome');
   const themeInputs = document.querySelectorAll('input[name="theme"]');
+  const signInBtn = document.getElementById('signInBtn');
+  const newUserBtn = document.getElementById('newUserBtn');
+  const signInNameInput = document.getElementById('signInNameInput');
+  const signInSubmitBtn = document.getElementById('signInSubmitBtn');
+  const signInCancelBtn = document.getElementById('signInCancelBtn');
+  const signInError = document.getElementById('signInError');
 
-  function setThemePreview() {
+  const uid = await waitForUid();
+  setLoading(true, 'Loading your data…');
+  CURRENT_USER = await getUserDoc(uid);
+  setLoading(false);
+
+  // If user already exists, just apply theme and badge
+  if (CURRENT_USER) {
+    applyTheme(CURRENT_USER.theme || 'dark', CURRENT_USER.accent || '#0a84ff');
+    updateUserBadge(CURRENT_USER);
+    return;
+  }
+
+  // Otherwise, show entry modal
+  entryOverlay?.classList.remove('hidden');
+
+  // Sign In flow
+  signInBtn?.addEventListener('click', () => {
+    entryOverlay.classList.add('hidden');
+    signInOverlay.classList.remove('hidden');
+    signInNameInput.value = '';
+    signInError.style.display = 'none';
+    signInError.textContent = '';
+  });
+  signInCancelBtn?.addEventListener('click', () => {
+    signInOverlay.classList.add('hidden');
+    entryOverlay.classList.remove('hidden');
+  });
+  signInSubmitBtn?.addEventListener('click', async () => {
+    const enteredName = (signInNameInput.value || '').trim();
+    if (!enteredName) {
+      signInError.textContent = 'Please enter your name.';
+      signInError.style.display = 'block';
+      return;
+    }
+    setLoading(true, 'Signing in…');
+    let userDoc = await findUserByName(enteredName);
+    setLoading(false);
+    if (!userDoc) {
+      signInError.textContent = 'No user found with that name.';
+      signInError.style.display = 'block';
+      return;
+    }
+    // Adopt found user data
+    await upsertUserDoc(uid, userDoc);
+    CURRENT_USER = { ...userDoc };
+    applyTheme(userDoc.theme || 'dark', userDoc.accent || '#0a84ff');
+    updateUserBadge(CURRENT_USER);
+    signInOverlay.classList.add('hidden');
+    showToast('Signed in!', 'success');
+  });
+
+  // New User flow
+  newUserBtn?.addEventListener('click', () => {
+    entryOverlay.classList.add('hidden');
+    welcomeOverlay.classList.remove('hidden');
+  });
+
+  // Always set up live preview and save button logic
+  function setThemePreview(){
     const selectedTheme = [...themeInputs].find(r => r.checked)?.value || 'dark';
     const acc = accentPicker?.value || '#0a84ff';
     applyTheme(selectedTheme, acc);
   }
-
-  const openSettings = document.getElementById('openSettings');
-  if (openSettings) {
-    openSettings.addEventListener('click', () => {
-      const p = getProfile() || { name: '', theme: 'dark', accent: '#0a84ff', games: 0, wins: 0 };
-      if (nameInput) nameInput.value = p.name || '';
-      if (accentPicker) accentPicker.value = p.accent || '#0a84ff';
-      themeInputs.forEach(r => r.checked = (r.value === (p.theme || 'dark')));
-      setThemePreview();
-      overlay?.classList.remove('hidden');
-    });
-  }
-
   if (swatches) {
     swatches.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-color]');
       if (!btn || !accentPicker) return;
-      accentPicker.value = btn.dataset.color;
-      setThemePreview();
+      accentPicker.value = btn.dataset.color; setThemePreview();
     });
   }
   accentPicker?.addEventListener('input', setThemePreview);
   themeInputs.forEach(r => r.addEventListener('change', setThemePreview));
 
-  if (existing && existing.name) {
-    applyTheme(existing.theme || 'dark', existing.accent || '#0a84ff');
-    updateUserBadge(existing);
-  } else {
-    overlay?.classList.remove('hidden');
-    setThemePreview();
+  // Helper to attach save button logic
+  function attachSaveBtnListener() {
+    if (!saveBtn) return;
+    // Remove previous listener by replacing the button
+    const newBtn = saveBtn.cloneNode(true);
+    saveBtn.parentNode.replaceChild(newBtn, saveBtn);
+    newBtn.addEventListener('click', async () => {
+      newBtn.disabled = true;
+      try {
+        setLoading(true, 'Saving…');
+        const enteredName = (nameInput?.value || '').trim().slice(0, 18) || 'Player';
+        const theme = [...themeInputs].find(r => r.checked)?.value || 'dark';
+        const accent = accentPicker?.value || '#0a84ff';
+
+        // If there is an existing user with this name, adopt their data
+        let base = await findUserByName(enteredName);
+        const initData = {
+          name: enteredName,
+          theme,
+          accent,
+          wins: base?.wins || 0,
+          games: base?.games || 0,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        await upsertUserDoc(uid, initData);
+        CURRENT_USER = { ...initData };
+        applyTheme(theme, accent);
+        updateUserBadge(CURRENT_USER);
+        welcomeOverlay?.classList.add('hidden');
+        showToast('Profile saved', 'success');
+      } finally {
+        setLoading(false); newBtn.disabled = false;
+      }
+    });
+    return newBtn;
   }
 
-  saveBtn?.addEventListener('click', () => {
-    const name = (nameInput?.value || '').trim().slice(0, 18) || 'Player';
-    const theme = [...themeInputs].find(r => r.checked)?.value || 'dark';
-    const accent = accentPicker?.value || '#0a84ff';
-    const base = getProfile() || { games: 0, wins: 0 };
-    const profile = { ...base, name, theme, accent };
-    saveProfile(profile);
-    applyTheme(theme, accent);
-    updateUserBadge(profile);
-    overlay?.classList.add('hidden');
-  });
+  // Attach save button listener now if modal is open
+  if (welcomeOverlay && !welcomeOverlay.classList.contains('hidden')) {
+    attachSaveBtnListener();
+  }
+
+  // Settings button opens overlay with current user
+  const openSettings = document.getElementById('openSettings');
+  if (openSettings) {
+    openSettings.addEventListener('click', () => {
+      if (!CURRENT_USER) return; // require loaded user
+      if (nameInput) nameInput.value = CURRENT_USER.name || '';
+      if (accentPicker) accentPicker.value = CURRENT_USER.accent || '#0a84ff';
+      const themeVal = CURRENT_USER.theme || 'dark';
+      const themeInputs = document.querySelectorAll('input[name="theme"]');
+      themeInputs.forEach(r => r.checked = (r.value === themeVal));
+      welcomeOverlay?.classList.remove('hidden');
+      attachSaveBtnListener();
+    });
+  }
 }
 
 // Hook into opponent card rendering to add accent overlay class if possible

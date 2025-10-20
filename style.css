@@ -257,6 +257,41 @@ header {
 
 .hidden { display: none !important; }
 
+/* Toasts */
+#toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 3000;
+}
+.toast {
+  background: var(--color-bg-light);
+  color: var(--color-modal-text);
+  border: 1px solid var(--color-stack-border);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px var(--color-modal-shadow);
+}
+.toast.success { border-color: #28a745; }
+.toast.error { border-color: #e55353; }
+
+/* Loader */
+#globalLoader {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  background: var(--color-bg-light);
+  color: var(--color-modal-text);
+  border: 1px solid var(--color-stack-border);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px var(--color-modal-shadow);
+  z-index: 3000;
+}
+
 /* Modal styles */
 .modal-overlay {
   position: fixed;
