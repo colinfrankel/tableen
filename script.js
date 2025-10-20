@@ -46,7 +46,7 @@ let currentGameCode = null;
 
 let socket;
 
-if (window.location.toString().startsWith('file://')) {
+if (window.location.toString().startsWith('http://')) {
   socket = io("http://localhost:3000");
 } else {
   socket = io("https://tabline.onrender.com");
@@ -100,7 +100,7 @@ socket.on('game created', ({ code }) => {
   showGameCode(code);
   lobbyStatus.innerText = `Waiting for other player...`;
   document.getElementById('gameStartOptions').classList.add('hidden');
-  updateDebugInfo({ gameCode: currentGameCode });
+  updateDebugInfo({ gameCode: currentGameCode, score: { myScore: 0, opponentScore: 0 } });
 
 });
 
@@ -109,6 +109,7 @@ socket.on('joined', (data) => {
   document.getElementById('tableCards').classList.remove('hidden');
   updateDebugInfo({
     gameCode: currentGameCode,
+    score: data.score || lastScore,
     extra: `
       <b>Deck Size:</b> 40<br>
     `
@@ -121,6 +122,7 @@ socket.on('your turn', (data) => {
   updateGameUI(data, true);
   updateDebugInfo({
     gameCode: currentGameCode,
+    score: data.score || lastScore,
     extra: `
       <b>Deck Size:</b> ${data.deck ? data.deck.length : '—'}<br>
     `
@@ -132,6 +134,7 @@ socket.on('wait', (data) => {
   updateGameUI(data, false);
   updateDebugInfo({
     gameCode: currentGameCode,
+    score: data.score || lastScore,
     extra: `
       <b>Deck Size:</b> ${data.deck ? data.deck.length : '—'}<br>
     `
@@ -142,11 +145,12 @@ socket.on('wait', (data) => {
 
 socket.on('update table', (table, hand) => {
   updateTableCards(table, hand);
+  updateDebugInfo({ gameCode: currentGameCode, score: lastScore });
 });
 
 socket.on('status', (msg) => {
   showStatusModal(msg);
-  updateDebugInfo({ extra: msg });
+  updateDebugInfo({ gameCode: currentGameCode, score: lastScore, extra: msg });
 });
 
 socket.on('opponent action', (data) => {
@@ -294,16 +298,28 @@ socket.on('round over', (data) => {
 
   showStatusModal(`${data.message}<br><br>${html}`);
 
+  console.log('Round over data:', data);
+
+  updateDebugInfo({
+    gameCode: currentGameCode,
+    score: data.score,
+    extra: `
+      <b>Deck Size:</b> 40<br>
+    `
+  });
+
   // Stats update now handled globally after 'round over' via Firestore; UI badge updates when data reloads
   try { } catch { }
 });
 
 socket.on('you won', () => {
+  console.log('You won the game!');
   incrementStats(1, 1);
   showToast('Win recorded!', 'success');
 });
 
 socket.on('you lost', () => {
+  console.log('You lost the game.');
   incrementStats(0, 1);
   showToast('Loss recorded :(', 'error');
 });
@@ -861,11 +877,14 @@ function playCard(action) {
 
 let lastDebugGameCode = null;
 
-function updateDebugInfo({ gameCode, extra }) {
+let lastScore = { myScore: 0, opponentScore: 0 };
+function updateDebugInfo({ gameCode, extra, score }) {
   if (gameCode) lastDebugGameCode = gameCode;
+  if (score) lastScore = score;
   const debugDiv = document.getElementById('debugInfo');
   debugDiv.innerHTML = `
     <b>Game Code:</b> ${lastDebugGameCode || '—'}<br>
+    <b>Score:</b> You ${lastScore.myScore} - Opponent ${lastScore.opponentScore}<br>
     ${extra ? `<div>${extra}</div>` : ''}
   `;
 }
@@ -909,61 +928,6 @@ async function bootstrapUserFlow() {
   setLoading(true, 'Loading your data…');
   CURRENT_USER = await getUserDoc(uid);
   setLoading(false);
-
-  // If user already exists, just apply theme and badge
-  if (CURRENT_USER) {
-    applyTheme(CURRENT_USER.theme || 'dark', CURRENT_USER.accent || '#0a84ff');
-    updateUserBadge(CURRENT_USER);
-    attachSaveBtnListener();
-    return;
-  }
-
-  // Otherwise, show entry modal
-  entryOverlay?.classList.remove('hidden');
-
-  // Sign In flow
-  signInBtn?.addEventListener('click', () => {
-    entryOverlay.classList.add('hidden');
-    signInOverlay.classList.remove('hidden');
-    signInNameInput.value = '';
-    signInError.style.display = 'none';
-    signInError.textContent = '';
-  });
-  signInCancelBtn?.addEventListener('click', () => {
-    signInOverlay.classList.add('hidden');
-    entryOverlay.classList.remove('hidden');
-  });
-  signInSubmitBtn?.addEventListener('click', async () => {
-    const enteredName = (signInNameInput.value || '').trim();
-    if (!enteredName) {
-      signInError.textContent = 'Please enter your name.';
-      signInError.style.display = 'block';
-      return;
-    }
-    setLoading(true, 'Signing in…');
-    let userDoc = await findUserByName(enteredName);
-    setLoading(false);
-    if (!userDoc) {
-      signInError.textContent = 'No user found with that name.';
-      signInError.style.display = 'block';
-      return;
-    }
-    // Adopt found user data
-    await upsertUserDoc(uid, userDoc);
-    CURRENT_USER = { ...userDoc };
-    applyTheme(userDoc.theme || 'dark', userDoc.accent || '#0a84ff');
-    updateUserBadge(CURRENT_USER);
-    signInOverlay.classList.add('hidden');
-    showToast('Signed in!', 'success');
-  });
-
-  // New User flow
-  newUserBtn?.addEventListener('click', () => {
-    entryOverlay.classList.add('hidden');
-    welcomeOverlay.classList.remove('hidden');
-    // Attach the Save & Continue handler now that the modal is visible
-    attachSaveBtnListener();
-  });
 
   // Always set up live preview and save button logic
   function setThemePreview() {
@@ -1039,17 +1003,59 @@ async function bootstrapUserFlow() {
       attachSaveBtnListener();
     });
   }
-}
 
-// Hook into opponent card rendering to add accent overlay class if possible
-const _origUpdateGameUI = typeof updateGameUI === 'function' ? updateGameUI : null;
-if (_origUpdateGameUI) {
-  window.updateGameUI = function (data, isYourTurn) {
-    _origUpdateGameUI.call(this, data, isYourTurn);
-    // After base render, add accent class to opponent backs
-    document.querySelectorAll('#opponentCards img').forEach(img => {
-      const src = img.getAttribute('src') || '';
-      if (src.includes('cardback')) img.classList.add('opponent-back');
-    });
+  // If user already exists, just apply theme and badge
+  if (CURRENT_USER) {
+    applyTheme(CURRENT_USER.theme || 'dark', CURRENT_USER.accent || '#0a84ff');
+    updateUserBadge(CURRENT_USER);
+    attachSaveBtnListener();
+    return;
   }
+
+  // Otherwise, show entry modal
+  entryOverlay?.classList.remove('hidden');
+
+  // Sign In flow
+  signInBtn?.addEventListener('click', () => {
+    entryOverlay.classList.add('hidden');
+    signInOverlay.classList.remove('hidden');
+    signInNameInput.value = '';
+    signInError.style.display = 'none';
+    signInError.textContent = '';
+  });
+  signInCancelBtn?.addEventListener('click', () => {
+    signInOverlay.classList.add('hidden');
+    entryOverlay.classList.remove('hidden');
+  });
+  signInSubmitBtn?.addEventListener('click', async () => {
+    const enteredName = (signInNameInput.value || '').trim();
+    if (!enteredName) {
+      signInError.textContent = 'Please enter your name.';
+      signInError.style.display = 'block';
+      return;
+    }
+    setLoading(true, 'Signing in…');
+    let userDoc = await findUserByName(enteredName);
+    setLoading(false);
+    if (!userDoc) {
+      signInError.textContent = 'No user found with that name.';
+      signInError.style.display = 'block';
+      return;
+    }
+    // Adopt found user data
+    await upsertUserDoc(uid, userDoc);
+    CURRENT_USER = { ...userDoc };
+    applyTheme(userDoc.theme || 'dark', userDoc.accent || '#0a84ff');
+    updateUserBadge(CURRENT_USER);
+    signInOverlay.classList.add('hidden');
+    showToast('Signed in!', 'success');
+  });
+
+  // New User flow
+  newUserBtn?.addEventListener('click', () => {
+    entryOverlay.classList.add('hidden');
+    welcomeOverlay.classList.remove('hidden');
+    // Attach the Save & Continue handler now that the modal is visible
+    attachSaveBtnListener();
+  });
 }

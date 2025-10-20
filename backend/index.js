@@ -286,17 +286,19 @@ io.on('connection', (socket) => {
             myCards: game.collected.playerOne,
             opponentCards: game.collected.playerTwo,
             myTableens: game.tableens.playerOne,
-            opponentTableens: game.tableens.playerTwo
+            opponentTableens: game.tableens.playerTwo,
+            score: { myScore: game.points.playerOne, opponentScore: game.points.playerTwo }
           });
           io.to(game.playerIds.playerTwo).emit('round over', {
             message: `Round over!\nYou: ${game.points.playerTwo} points\nOpponent: ${game.points.playerOne} points`,
             myCards: game.collected.playerTwo,
             opponentCards: game.collected.playerOne,
             myTableens: game.tableens.playerTwo,
-            opponentTableens: game.tableens.playerOne
+            opponentTableens: game.tableens.playerOne,
+            score: { myScore: game.points.playerTwo, opponentScore: game.points.playerOne }
           });
-
-          if (game.points.playerOne >= 21 || game.points.playerTwo >= 21) {
+          const SCORE_TO_WIN = 21;
+          if (game.points.playerOne >= SCORE_TO_WIN || game.points.playerTwo >= SCORE_TO_WIN) {
             let winner = '';
             if (game.points.playerOne > game.points.playerTwo) winner = 'Player 1 wins!';
             else if (game.points.playerTwo > game.points.playerOne) winner = 'Player 2 wins!';
