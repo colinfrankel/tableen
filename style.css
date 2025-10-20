@@ -316,6 +316,37 @@ header {
   font-size: 1em;
 }
 
+.modal-entry {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-signin {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-welcome {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.welcome-row {
+  width: 40%;
+}
+
 .modal-welcome h2 {
   margin: 0.2em 0 0.1em 0;
 }

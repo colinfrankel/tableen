@@ -940,6 +940,7 @@ async function bootstrapUserFlow() {
   if (CURRENT_USER) {
     applyTheme(CURRENT_USER.theme || 'dark', CURRENT_USER.accent || '#0a84ff');
     updateUserBadge(CURRENT_USER);
+    attachSaveBtnListener();
     return;
   }
 
@@ -986,6 +987,8 @@ async function bootstrapUserFlow() {
   newUserBtn?.addEventListener('click', () => {
     entryOverlay.classList.add('hidden');
     welcomeOverlay.classList.remove('hidden');
+    // Attach the Save & Continue handler now that the modal is visible
+    attachSaveBtnListener();
   });
 
   // Always set up live preview and save button logic
@@ -1006,10 +1009,11 @@ async function bootstrapUserFlow() {
 
   // Helper to attach save button logic
   function attachSaveBtnListener() {
-    if (!saveBtn) return;
-    // Remove previous listener by replacing the button
-    const newBtn = saveBtn.cloneNode(true);
-    saveBtn.parentNode.replaceChild(newBtn, saveBtn);
+    const btn = document.getElementById('saveWelcome');
+    if (!btn) return;
+    // Remove previous listeners by replacing the button with a clone
+    const newBtn = btn.cloneNode(true);
+    if (btn.parentNode) btn.parentNode.replaceChild(newBtn, btn);
     newBtn.addEventListener('click', async () => {
       newBtn.disabled = true;
       try {
