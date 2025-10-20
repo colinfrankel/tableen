@@ -172,17 +172,6 @@ socket.on('opponent action', (data) => {
     return `<span style="color:${color};font-weight:bold;">${val}${suit}</span>`;
   }
 
-  // Helper to get stack label and cards
-  function stackLabel(stackId, stackCards, stackNumber) {
-    let label = '';
-    if (stackNumber === 1 || stackNumber === 14) label = 'Aces';
-    else if (stackNumber === 11) label = 'Jacks';
-    else if (stackNumber === 12) label = 'Queens';
-    else if (stackNumber === 13) label = 'Kings';
-    else label = stackNumber;
-    const cards = stackCards.map(miniCardText).join(', ');
-    return `${label} [${cards}]`;
-  }
 
   // Build a readable action description
   let actionText = '';
@@ -306,11 +295,21 @@ socket.on('round over', (data) => {
   showStatusModal(`${data.message}<br><br>${html}`);
 
   // Stats update now handled globally after 'round over' via Firestore; UI badge updates when data reloads
-  try {} catch {}
+  try { } catch { }
+});
+
+socket.on('you won', () => {
+  incrementStats(1, 1);
+  showToast('Win recorded!', 'success');
+});
+
+socket.on('you lost', () => {
+  incrementStats(0, 1);
+  showToast('Loss recorded :(', 'error');
 });
 
 // Toasts & loader helpers
-function showToast(message, type = 'info', timeout = 2500){
+function showToast(message, type = 'info', timeout = 2500) {
   const c = document.getElementById('toasts');
   if (!c) return;
   const el = document.createElement('div');
@@ -319,7 +318,7 @@ function showToast(message, type = 'info', timeout = 2500){
   c.appendChild(el);
   setTimeout(() => { el.remove(); }, timeout);
 }
-function setLoading(active, text){
+function setLoading(active, text) {
   const ld = document.getElementById('globalLoader');
   if (!ld) return;
   if (text) ld.textContent = text;
@@ -327,9 +326,9 @@ function setLoading(active, text){
 }
 
 // --- Firestore helpers for user sync ---
-function getFS(){ return (window._firestore) || (window.firebase && firebase.firestore && firebase.firestore()) || null; }
-function getAuth(){ return (window.firebase && firebase.auth && firebase.auth()) || null; }
-async function waitForUid(){
+function getFS() { return (window._firestore) || (window.firebase && firebase.firestore && firebase.firestore()) || null; }
+function getAuth() { return (window.firebase && firebase.auth && firebase.auth()) || null; }
+async function waitForUid() {
   const auth = getAuth();
   if (!auth) return null;
   if (auth.currentUser && auth.currentUser.uid) return auth.currentUser.uid;
@@ -337,20 +336,20 @@ async function waitForUid(){
     const un = auth.onAuthStateChanged(u => { un(); resolve(u ? u.uid : null); });
   });
 }
-async function getUserDoc(uid){
+async function getUserDoc(uid) {
   const db = getFS(); if (!db) return null;
-  try { const snap = await db.collection('users').doc(uid).get(); return snap.exists ? (snap.data()||null) : null; } catch { return null; }
+  try { const snap = await db.collection('users').doc(uid).get(); return snap.exists ? (snap.data() || null) : null; } catch { return null; }
 }
-async function upsertUserDoc(uid, data){
+async function upsertUserDoc(uid, data) {
   const db = getFS(); if (!db) return;
-  try { await db.collection('users').doc(uid).set({ ...data, updatedAt: Date.now() }, { merge: true }); } catch {}
+  try { await db.collection('users').doc(uid).set({ ...data, updatedAt: Date.now() }, { merge: true }); } catch { }
 }
-async function findUserByName(name){
+async function findUserByName(name) {
   const db = getFS(); if (!db) return null;
-  const n = (name||'').trim(); if (!n) return null;
+  const n = (name || '').trim(); if (!n) return null;
   try {
     console.log('Querying for user by name:', n);
-    const q = await db.collection('users').where('name','==',n).get();
+    const q = await db.collection('users').where('name', '==', n).get();
     if (q.empty) {
       console.log('No users found with that name.');
       return null;
@@ -361,50 +360,25 @@ async function findUserByName(name){
     });
     // Return the most recently updated one
     const doc = q.docs[0];
-    return doc.data()||null;
+    return doc.data() || null;
   } catch (err) {
     console.error('Error in findUserByName:', err);
     return null;
   }
 }
-async function incrementStats(winInc, gameInc){
+async function incrementStats(winInc, gameInc) {
   const db = getFS(); const auth = getAuth(); if (!db || !auth || !auth.currentUser) return;
   try {
     await db.collection('users').doc(auth.currentUser.uid).set({
-      wins: firebase.firestore.FieldValue.increment(winInc||0),
-      games: firebase.firestore.FieldValue.increment(gameInc||0),
+      wins: firebase.firestore.FieldValue.increment(winInc || 0),
+      games: firebase.firestore.FieldValue.increment(gameInc || 0),
       updatedAt: Date.now()
     }, { merge: true });
-  } catch {}
+  } catch { }
 }
 
 let CURRENT_USER = null;
 
-// After a round ends, bump local counters and push to leaderboard
-(function attachRoundOver(){
-  if (!window.socket || !socket.on) return;
-  const origOn = socket.on.bind(socket);
-  socket.on = function(evt, handler){
-    if (evt !== 'round over') return origOn(evt, handler);
-    const wrapped = (data) => {
-      try { handler && handler(data); } finally {
-        try {
-          const msg = (data && data.message || '').toLowerCase();
-          let isWin = false;
-          if (msg.includes('you:') && msg.includes('opponent:')) {
-            const m = (data.message || '').match(/you:\s*(\d+)\s*points[\s\S]*opponent:\s*(\d+)\s*points/i);
-            if (m) { const yp = +m[1] || 0; const op = +m[2] || 0; if (yp > op) isWin = true; }
-          } else if (msg.includes('you win') || msg.includes('you won') || msg.includes('you take the round')) {
-            isWin = true;
-          }
-          incrementStats(isWin ? 1 : 0, 1);
-          showToast(isWin ? 'Win recorded!' : 'Game recorded', 'success');
-        } catch {}
-      }
-    };
-    return origOn(evt, wrapped);
-  };
-})();
 
 // drag/drop base handlers
 document.body.addEventListener('dragover', (e) => e.preventDefault());
@@ -992,7 +966,7 @@ async function bootstrapUserFlow() {
   });
 
   // Always set up live preview and save button logic
-  function setThemePreview(){
+  function setThemePreview() {
     const selectedTheme = [...themeInputs].find(r => r.checked)?.value || 'dark';
     const acc = accentPicker?.value || '#0a84ff';
     applyTheme(selectedTheme, acc);
@@ -1070,7 +1044,7 @@ async function bootstrapUserFlow() {
 // Hook into opponent card rendering to add accent overlay class if possible
 const _origUpdateGameUI = typeof updateGameUI === 'function' ? updateGameUI : null;
 if (_origUpdateGameUI) {
-  window.updateGameUI = function(data, isYourTurn) {
+  window.updateGameUI = function (data, isYourTurn) {
     _origUpdateGameUI.call(this, data, isYourTurn);
     // After base render, add accent class to opponent backs
     document.querySelectorAll('#opponentCards img').forEach(img => {

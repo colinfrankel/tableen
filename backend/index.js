@@ -302,6 +302,12 @@ io.on('connection', (socket) => {
             else if (game.points.playerTwo > game.points.playerOne) winner = 'Player 2 wins!';
             else winner = 'It\'s a tie!';
             io.to(gameCode).emit('status', `Game over! ${winner}`);
+            const winnerPlayerID = game.points.playerOne > game.points.playerTwo ? game.playerIds.playerOne : game.playerIds.playerTwo;
+            const loserPlayerID = game.points.playerOne > game.points.playerTwo ? game.playerIds.playerTwo : game.playerIds.playerOne;
+
+            io.to(winnerPlayerID).emit('you won');
+            io.to(loserPlayerID).emit('you lost');
+
             delete games[gameCode];
             return;
           }
