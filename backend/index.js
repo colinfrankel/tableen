@@ -429,12 +429,14 @@ io.on('connection', (socket) => {
     if (newState) {
       games[gameCode] = newState;
 
-      if (payload.type !== 'boardstack') {
+      if (payload.type === 'grab') {
+        game.turnStartTableCards = [];
+        game.turnBoardstackHistory = [];
+        game.turnLastActionStackId = null;
+      } else if (payload.type !== 'boardstack') {
         const finalTargetId = payload.type === 'normal'
           ? game.tableCards[game.tableCards.length - 1]?.id
-          : payload.type === 'grab'
-            ? null
-            : payload.stackId || null;
+          : payload.stackId || null;
 
         restoreTableAfterTurn(game, finalTargetId);
       }
