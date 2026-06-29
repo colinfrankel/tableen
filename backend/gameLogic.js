@@ -22,6 +22,7 @@ function removeCardFromHand(gameState, playerKey, card) {
 }
 
 function validateAndApplyAction(gameState, action, playerKey) {
+  console.log(action)
   // STACK
   if (action.type === 'stack') {
     const stackIndex = action.stackId ? resolveStackIndex(gameState, action.stackId) : -1;
@@ -90,7 +91,6 @@ function validateAndApplyAction(gameState, action, playerKey) {
 
 
     removeCardFromHand(gameState, playerKey, playedCard);
-
     return { newState: gameState };
   }
 

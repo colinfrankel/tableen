@@ -46,9 +46,12 @@ let currentGameCode = null;
 
 let socket;
 
-if (window.location.toString().startsWith('http://')) {
+if (window.location.toString().startsWith('http://') || window.location.toString().startsWith('file://')) {
+  console.log("Dev server")
   socket = io("http://localhost:3000");
 } else {
+  console.log("Prod server")
+  console.log(window.location.toString())
   socket = io("https://tabline.onrender.com");
 }
 
@@ -61,13 +64,13 @@ const gameCodeSpan = document.getElementById('gameCode');
 const lobbyStatus = document.getElementById('lobbyStatus');
 
 createBtn.addEventListener('click', () => {
-  socket.emit('create game', (res) => { });
+  socket.emit('create game', { playerName: CURRENT_USER ? CURRENT_USER.name : 'Player' }, (res) => { });
 });
 
 joinBtn.addEventListener('click', () => {
   const code = (joinCodeInput.value || '').trim().toUpperCase();
   if (!code) return alert('Enter a game code.');
-  socket.emit('join game', code, (res) => {
+  socket.emit('join game', { code, playerName: CURRENT_USER ? CURRENT_USER.name : 'Player' }, (res) => {
     if (res && res.ok) {
       currentGameCode = res.code;
       showGameCode(res.code);
@@ -90,6 +93,29 @@ function showGameCode(code) {
   document.getElementById('debugInfo').classList.remove('hidden');
 }
 
+async function syncLeaderboardProfile(profile) {
+  if (!profile || !window.TableenLB || typeof window.TableenLB.pushStats !== 'function') return;
+  await window.TableenLB.pushStats({
+    name: profile.name || 'Player',
+    wins: profile.wins || 0,
+    games: profile.games || 0
+  });
+  if (typeof window.TableenLB.loadLeaderboard === 'function') {
+    window.TableenLB.loadLeaderboard();
+  }
+}
+
+function resolveOpponentName(data = {}) {
+  const selfName = CURRENT_USER?.name;
+  const playerName = data.playerName || '';
+  const opponentName = data.opponentName || '';
+
+  if (!selfName) return opponentName || playerName || 'Opponent';
+  if (playerName === selfName) return opponentName || 'Opponent';
+  if (opponentName === selfName) return playerName || 'Opponent';
+  return opponentName || playerName || 'Opponent';
+}
+
 // socket events
 socket.on('connect', () => {
   console.info('Connected to server');
@@ -100,16 +126,18 @@ socket.on('game created', ({ code }) => {
   showGameCode(code);
   lobbyStatus.innerText = `Waiting for other player...`;
   document.getElementById('gameStartOptions').classList.add('hidden');
-  updateDebugInfo({ gameCode: currentGameCode, score: { myScore: 0, opponentScore: 0 } });
+  updateDebugInfo({ gameCode: currentGameCode, score: { myScore: 0, opponentScore: 0 }, opponentName: 'Opponent' });
 
 });
 
 socket.on('joined', (data) => {
   document.getElementById('lobby').classList.add('hidden');
   document.getElementById('tableCards').classList.remove('hidden');
+  console.log(data)
   updateDebugInfo({
     gameCode: currentGameCode,
     score: data.score || lastScore,
+    opponentName: resolveOpponentName(data),
     extra: `
       <b>Deck Size:</b> 40<br>
     `
@@ -123,6 +151,7 @@ socket.on('your turn', (data) => {
   updateDebugInfo({
     gameCode: currentGameCode,
     score: data.score || lastScore,
+    opponentName: resolveOpponentName(data),
     extra: `
       <b>Deck Size:</b> ${data.deck ? data.deck.length : '—'}<br>
     `
@@ -135,6 +164,7 @@ socket.on('wait', (data) => {
   updateDebugInfo({
     gameCode: currentGameCode,
     score: data.score || lastScore,
+    opponentName: resolveOpponentName(data),
     extra: `
       <b>Deck Size:</b> ${data.deck ? data.deck.length : '—'}<br>
     `
@@ -246,7 +276,10 @@ socket.on('opponent action', (data) => {
     actionText = 'Gonna be so honest no idea what just happened. This shouldn\'t happen.';
   }
 
-  box.innerHTML = `<b>Opponent's last action:</b><br>${actionText}`;
+  const actorName = data.playerName || data.opponentName || 'Opponent';
+  box.innerHTML = `<b>${actorName}'s last action:</b><br>${actionText}`;
+  console.log("== DATA ==")
+  console.log(data)
 });
 
 socket.on('round over', (data) => {
@@ -292,9 +325,9 @@ socket.on('round over', (data) => {
   }
 
   let html = `<b>Your collected cards:</b><br>${summarize(data.myCards)}<br>`;
-  html += `<b>Opponent's collected cards:</b><br>${summarize(data.opponentCards)}<br>`;
+  html += `<b>${data.playerName}'s collected cards:</b><br>${summarize(data.opponentCards)}<br>`;
   html += `<b>Your Tableens:</b> ${data.myTableens || 0}<br>`;
-  html += `<b>Opponent's Tableens:</b> ${data.opponentTableens || 0}<br>`;
+  html += `<b>${data.playerName}'s Tableens:</b> ${data.opponentTableens || 0}<br>`;
 
   showStatusModal(`${data.message}<br><br>${html}`);
 
@@ -402,11 +435,13 @@ document.body.addEventListener('drop', (e) => {
   e.preventDefault();
   e.stopPropagation();
   // if dropped outside a stack, play normally (new pile)
+  console.log(CURRENT_USER)
   if (draggedCard) {
     playCard({
       type: "normal",
       gameCode: currentGameCode,
-      playedCard: { card: draggedCard.card, suit: draggedCard.suit }
+      playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+      playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
     });
     draggedCard = null;
   }
@@ -528,7 +563,8 @@ function updateTableCards(tableCards, playerHand = []) {
           playCard({
             type: "normal",
             gameCode: currentGameCode,
-            playedCard: { card: draggedCard.card, suit: draggedCard.suit }
+            playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+            playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
           });
           draggedCard = null;
         }
@@ -554,7 +590,8 @@ function updateTableCards(tableCards, playerHand = []) {
               gameCode: currentGameCode,
               playedCard: { card: draggedCard.card, suit: draggedCard.suit },
               stackId: stackObj.id,
-              stackAsSum: true
+              stackAsSum: true,
+              playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
             });
             draggedCard = null;
             return;
@@ -581,7 +618,8 @@ function updateTableCards(tableCards, playerHand = []) {
                     playedCard: { card: playedCardValue, suit: draggedCard.suit },
                     stackId: stackObj.id,
                     stackAsSum: choice === 'sum',
-                    stackSum
+                    stackSum,
+                    playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
                   });
                   draggedCard = null;
                 });
@@ -591,7 +629,8 @@ function updateTableCards(tableCards, playerHand = []) {
                   type: "grab",
                   gameCode: currentGameCode,
                   playedCard: { card: draggedCard.card, suit: draggedCard.suit },
-                  stackId: stackObj.id
+                  stackId: stackObj.id,
+                  playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
                 });
                 draggedCard = null;
                 return;
@@ -608,7 +647,8 @@ function updateTableCards(tableCards, playerHand = []) {
                   playedCard: { card: playedCardValue, suit: draggedCard.suit },
                   stackId: stackObj.id,
                   stackAsSum: choice === 'sum',
-                  stackSum
+                  stackSum,
+                  playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
                 });
                 draggedCard = null;
               }, "Stack", "Grab");
@@ -618,7 +658,8 @@ function updateTableCards(tableCards, playerHand = []) {
                 type: "grab",
                 gameCode: currentGameCode,
                 playedCard: { card: draggedCard.card, suit: draggedCard.suit },
-                stackId: stackObj.id
+                stackId: stackObj.id,
+                playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
               });
               draggedCard = null;
               return;
@@ -636,7 +677,8 @@ function updateTableCards(tableCards, playerHand = []) {
                   playedCard: { card: playedCardValue, suit: draggedCard.suit },
                   stackId: stackObj.id,
                   stackAsSum: choice === 'sum',
-                  stackSum
+                  stackSum,
+                  playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
                 });
                 draggedCard = null;
               }, "Stack", "Grab");
@@ -646,7 +688,8 @@ function updateTableCards(tableCards, playerHand = []) {
                 type: "grab",
                 gameCode: currentGameCode,
                 playedCard: { card: draggedCard.card, suit: draggedCard.suit },
-                stackId: stackObj.id
+                stackId: stackObj.id,
+                playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
               });
               draggedCard = null;
               return;
@@ -675,7 +718,8 @@ function updateTableCards(tableCards, playerHand = []) {
                   type: "stack",
                   gameCode: currentGameCode,
                   playedCard: { card: playedCardValue, suit: draggedCard.suit },
-                  stackId: stackObj.id
+                  stackId: stackObj.id,
+                  playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
                 });
                 draggedCard = null;
               } else {
@@ -683,7 +727,8 @@ function updateTableCards(tableCards, playerHand = []) {
                   type: "grab",
                   gameCode: currentGameCode,
                   playedCard: { card: draggedCard.card, suit: draggedCard.suit },
-                  stackId: stackObj.id
+                  stackId: stackObj.id,
+                  playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
                 });
                 draggedCard = null;
               }
@@ -694,7 +739,8 @@ function updateTableCards(tableCards, playerHand = []) {
             type: "grab",
             gameCode: currentGameCode,
             playedCard: { card: draggedCard.card, suit: draggedCard.suit },
-            stackId: stackObj.id
+            stackId: stackObj.id,
+            playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
           });
           draggedCard = null;
           return;
@@ -711,7 +757,8 @@ function updateTableCards(tableCards, playerHand = []) {
             type: "stack",
             gameCode: currentGameCode,
             playedCard: { card: playedCardValue, suit: draggedCard.suit },
-            stackId: stackObj.id
+            stackId: stackObj.id,
+            playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
           });
           draggedCard = null;
           return;
@@ -724,7 +771,8 @@ function updateTableCards(tableCards, playerHand = []) {
             type: "stack",
             gameCode: currentGameCode,
             playedCard: { card: playedCardValue, suit: draggedCard.suit },
-            stackId: stackObj.id
+            stackId: stackObj.id,
+            playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
           });
           draggedCard = null;
           return;
@@ -737,7 +785,8 @@ function updateTableCards(tableCards, playerHand = []) {
             type: "stack",
             gameCode: currentGameCode,
             playedCard: { card: playedCardValue, suit: draggedCard.suit },
-            stackId: stackObj.id
+            stackId: stackObj.id,
+            playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
           });
           draggedCard = null;
           return;
@@ -779,7 +828,8 @@ function updateTableCards(tableCards, playerHand = []) {
               gameCode: currentGameCode,
               from: fromStack.id,
               to: toStack.id,
-              stackAsSum: true
+              stackAsSum: true,
+              playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
             });
             draggedTableCard = null;
             return;
@@ -792,7 +842,8 @@ function updateTableCards(tableCards, playerHand = []) {
                 gameCode: currentGameCode,
                 from: fromStack.id,
                 to: toStack.id,
-                stackAsSum: choice === 'sum'
+                stackAsSum: choice === 'sum',
+                playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
               });
               draggedTableCard = null;
             }, "Stack", "Sum");
@@ -803,7 +854,8 @@ function updateTableCards(tableCards, playerHand = []) {
               gameCode: currentGameCode,
               from: fromStack.id,
               to: toStack.id,
-              stackAsSum: true
+              stackAsSum: true,
+              playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
             });
             draggedTableCard = null;
             return;
@@ -813,7 +865,8 @@ function updateTableCards(tableCards, playerHand = []) {
               gameCode: currentGameCode,
               from: fromStack.id,
               to: toStack.id,
-              stackAsSum: false
+              stackAsSum: false,
+              playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
             });
             draggedTableCard = null;
             return;
@@ -826,7 +879,8 @@ function updateTableCards(tableCards, playerHand = []) {
             type: "boardstack",
             gameCode: currentGameCode,
             from: fromStack.id,
-            to: toStack.id
+            to: toStack.id,
+            playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
           });
           draggedTableCard = null;
           return;
@@ -839,7 +893,8 @@ function updateTableCards(tableCards, playerHand = []) {
             gameCode: currentGameCode,
             from: fromStack.id,
             to: toStack.id,
-            stackAsSum: false // classic stack
+            stackAsSum: false, // classic stack
+            playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
           });
           draggedTableCard = null;
           return;
@@ -858,7 +913,8 @@ function updateTableCards(tableCards, playerHand = []) {
           gameCode: currentGameCode,
           from: fromStack.id,
           to: toStack.id,
-          stackAsSum: true
+          stackAsSum: true,
+          playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
         });
         draggedTableCard = null;
         return;
@@ -878,13 +934,14 @@ function playCard(action) {
 let lastDebugGameCode = null;
 
 let lastScore = { myScore: 0, opponentScore: 0 };
-function updateDebugInfo({ gameCode, extra, score }) {
+function updateDebugInfo({ gameCode, extra, score, opponentName }) {
   if (gameCode) lastDebugGameCode = gameCode;
   if (score) lastScore = score;
+  const opponentLabel = opponentName || 'Opponent';
   const debugDiv = document.getElementById('debugInfo');
   debugDiv.innerHTML = `
     <b>Game Code:</b> ${lastDebugGameCode || '—'}<br>
-    <b>Score:</b> You ${lastScore.myScore} - Opponent ${lastScore.opponentScore}<br>
+    <b>Score:</b> You ${lastScore.myScore} - ${opponentLabel} ${lastScore.opponentScore}<br>
     ${extra ? `<div>${extra}</div>` : ''}
   `;
 }
@@ -975,6 +1032,7 @@ async function bootstrapUserFlow() {
         CURRENT_USER = { ...initData };
         applyTheme(theme, accent);
         updateUserBadge(CURRENT_USER);
+        await syncLeaderboardProfile(CURRENT_USER);
         welcomeOverlay?.classList.add('hidden');
         showToast('Profile saved', 'success');
       } finally {
@@ -1047,6 +1105,7 @@ async function bootstrapUserFlow() {
     CURRENT_USER = { ...userDoc };
     applyTheme(userDoc.theme || 'dark', userDoc.accent || '#0a84ff');
     updateUserBadge(CURRENT_USER);
+    await syncLeaderboardProfile(CURRENT_USER);
     signInOverlay.classList.add('hidden');
     showToast('Signed in!', 'success');
   });

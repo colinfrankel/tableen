@@ -47,13 +47,12 @@
   async function pushStats({ name, wins, games }){
     const db = getDB(); if (!db) return;
     const uid = await waitForUid(); if (!uid) return;
-  const ref = db.collection('users').doc(uid);
-    await ref.set({
-      name: name || 'Player',
-      wins: wins || 0,
-      games: games || 0,
-      updatedAt: Date.now()
-    }, { merge: true });
+    const ref = db.collection('users').doc(uid);
+    const data = { updatedAt: Date.now() };
+    if (name !== undefined) data.name = name || 'Player';
+    if (wins !== undefined) data.wins = wins;
+    if (games !== undefined) data.games = games;
+    await ref.set(data, { merge: true });
   }
 
   window.TableenLB = { loadLeaderboard, pushStats };

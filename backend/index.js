@@ -43,10 +43,126 @@ function makeCode(length = 5) {
 const games = {};
 const socketMap = {};
 
+function cloneTableCards(tableCards) {
+  return tableCards.map(stack => ({
+    id: stack.id,
+    stackNumber: stack.stackNumber,
+    cards: stack.cards.map(card => ({ ...card }))
+  }));
+}
+
+function setTurnStartSnapshot(game) {
+  game.turnStartTableCards = cloneTableCards(game.tableCards);
+  game.turnBoardstackHistory = [];
+}
+
+function getBoardstackChainTargetIds(history, finalTargetId) {
+  const keepIds = new Set();
+  let currentTargetId = finalTargetId;
+
+  while (currentTargetId) {
+    const entry = [...history].reverse().find(item => item.toStackId === currentTargetId && !keepIds.has(item.historyId));
+    if (!entry) break;
+    keepIds.add(entry.historyId);
+    currentTargetId = entry.fromStackId;
+  }
+
+  return keepIds;
+}
+
+function restoreTableAfterTurn(game, finalTargetId = null) {
+  if (!Array.isArray(game.turnStartTableCards)) {
+    game.turnStartTableCards = [];
+  }
+
+  if (!Array.isArray(game.turnBoardstackHistory)) {
+    game.turnBoardstackHistory = [];
+  }
+
+  if (finalTargetId === null) {
+    game.tableCards = game.turnStartTableCards.filter(stack => stack.id !== game.turnLastActionStackId);
+    game.turnStartTableCards = [];
+    game.turnBoardstackHistory = [];
+    game.turnLastActionStackId = null;
+    return;
+  }
+
+  const history = Array.isArray(game.turnBoardstackHistory) ? game.turnBoardstackHistory : [];
+  const turnStartTableCards = Array.isArray(game.turnStartTableCards) ? cloneTableCards(game.turnStartTableCards) : [];
+
+  if (history.length === 0) {
+    game.turnStartTableCards = [];
+    game.turnBoardstackHistory = [];
+    return;
+  }
+
+  const keepHistoryIds = getBoardstackChainTargetIds(history, finalTargetId);
+  if (keepHistoryIds.size === 0) {
+    const currentTargetStack = finalTargetId
+      ? game.tableCards.find(stack => stack.id === finalTargetId)
+      : null;
+
+    game.tableCards = turnStartTableCards;
+    if (currentTargetStack) {
+      const targetIndex = game.tableCards.findIndex(stack => stack.id === finalTargetId);
+      if (targetIndex === -1) {
+        game.tableCards.push(currentTargetStack);
+      } else {
+        game.tableCards[targetIndex] = currentTargetStack;
+      }
+    }
+    game.turnStartTableCards = [];
+    game.turnBoardstackHistory = [];
+    return;
+  }
+
+  const rebuiltTableCards = cloneTableCards(turnStartTableCards);
+
+  const applyHistoryEntry = (entry) => {
+    const fromIndex = rebuiltTableCards.findIndex(stack => stack.id === entry.fromStackId);
+    const toIndex = rebuiltTableCards.findIndex(stack => stack.id === entry.toStackId);
+    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+      return;
+    }
+
+    const fromStack = rebuiltTableCards[fromIndex];
+    const toStack = rebuiltTableCards[toIndex];
+    toStack.cards = [...toStack.cards, ...fromStack.cards];
+    toStack.stackNumber = entry.stackNumber;
+    rebuiltTableCards.splice(fromIndex, 1);
+  };
+
+  history
+    .filter(entry => keepHistoryIds.has(entry.historyId))
+    .forEach(applyHistoryEntry);
+
+  if (finalTargetId) {
+    const currentTargetStack = game.tableCards.find(stack => stack.id === finalTargetId);
+    if (currentTargetStack) {
+      const targetIndex = rebuiltTableCards.findIndex(stack => stack.id === finalTargetId);
+      if (targetIndex === -1) {
+        rebuiltTableCards.push(currentTargetStack);
+      } else {
+        rebuiltTableCards[targetIndex] = currentTargetStack;
+      }
+    }
+  }
+
+  game.tableCards = rebuiltTableCards;
+  game.turnStartTableCards = [];
+  game.turnBoardstackHistory = [];
+  game.turnLastActionStackId = null;
+}
+
 io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id);
 
-  socket.on('create game', (cb) => {
+  socket.on('create game', (payload, cb) => {
+    if (typeof payload === 'function') {
+      cb = payload;
+      payload = {};
+    }
+    const creatorName = (payload && payload.playerName) ? String(payload.playerName).trim().slice(0, 18) : 'Player';
     let code;
     do { code = makeCode(5); } while (games[code]);
 
@@ -60,8 +176,12 @@ io.on('connection', (socket) => {
       collected: { playerOne: [], playerTwo: [] },
       points: { playerOne: 0, playerTwo: 0 },
       tableens: { playerOne: 0, playerTwo: 0 },
+      playerNames: { playerOne: creatorName, playerTwo: 'Opponent' },
       nextStackId: 1,
-      lastGrabber: null
+      lastGrabber: null,
+      turnStartTableCards: [],
+      turnBoardstackHistory: [],
+      turnLastActionStackId: null
     };
 
     socket.join(code);
@@ -72,7 +192,13 @@ io.on('connection', (socket) => {
     socket.emit('game created', { code });
   });
 
-  socket.on('join game', (code, cb) => {
+  socket.on('join game', (payload, cb) => {
+    if (typeof payload === 'function') {
+      cb = payload;
+      payload = {};
+    }
+    const code = typeof payload === 'string' ? payload : payload.code;
+    const joinerName = (payload && payload.playerName) ? String(payload.playerName).trim().slice(0, 18) : 'Player';
     const game = games[code];
     if (!game) {
       if (typeof cb === 'function') cb({ ok: false, message: 'Game not found' });
@@ -109,6 +235,8 @@ io.on('connection', (socket) => {
 
     socket.join(code);
     socketMap[socket.id] = { gameCode: code, playerKey };
+    game.playerNames = game.playerNames || { playerOne: 'Player', playerTwo: 'Opponent' };
+    game.playerNames[playerKey] = joinerName;
 
     // --- FIX: If currentPlayer is not a connected socket, assign to whoever just joined/rejoined ---
     const validPlayerIds = [game.playerIds.playerOne, game.playerIds.playerTwo];
@@ -120,12 +248,15 @@ io.on('connection', (socket) => {
 
     // If game already started, just send current state
     if (game.playerHands.playerOne.length && game.playerHands.playerTwo.length && game.tableCards.length) {
+      const otherKey = playerKey === 'playerOne' ? 'playerTwo' : 'playerOne';
       if (game.currentPlayer === socket.id) {
         socket.emit('your turn', {
           ...game,
           hand: game.playerHands[playerKey],
           table: game.tableCards,
           opponentCards: game.playerHands[playerKey === 'playerOne' ? 'playerTwo' : 'playerOne'].length,
+          playerName: game.playerNames[playerKey],
+          opponentName: game.playerNames[otherKey],
           gameCode: code
         });
       } else {
@@ -134,12 +265,13 @@ io.on('connection', (socket) => {
           hand: game.playerHands[playerKey],
           table: game.tableCards,
           opponentCards: game.playerHands[playerKey === 'playerOne' ? 'playerTwo' : 'playerOne'].length,
+          playerName: game.playerNames[playerKey],
+          opponentName: game.playerNames[otherKey],
           gameCode: code
         });
       }
 
       // Also update the other player
-      const otherKey = playerKey === 'playerOne' ? 'playerTwo' : 'playerOne';
       const otherId = game.playerIds[otherKey];
       if (otherId) {
         if (game.currentPlayer === otherId) {
@@ -148,6 +280,8 @@ io.on('connection', (socket) => {
             hand: game.playerHands[otherKey],
             table: game.tableCards,
             opponentCards: game.playerHands[playerKey].length,
+            playerName: game.playerNames[otherKey],
+            opponentName: game.playerNames[playerKey],
             gameCode: code
           });
         } else {
@@ -156,13 +290,20 @@ io.on('connection', (socket) => {
             hand: game.playerHands[otherKey],
             table: game.tableCards,
             opponentCards: game.playerHands[playerKey].length,
+            playerName: game.playerNames[otherKey],
+            opponentName: game.playerNames[playerKey],
             gameCode: code
           });
         }
       }
 
       if (typeof cb === 'function') cb({ ok: true, code });
-      io.to(code).emit('joined', { message: 'Both players connected', code });
+      io.to(code).emit('joined', {
+        message: 'Both players connected',
+        code,
+        playerName: game.playerNames.playerOne,
+        opponentName: game.playerNames.playerTwo
+      });
       return;
     }
 
@@ -175,6 +316,7 @@ io.on('connection', (socket) => {
       stackNumber: cardArr[0].card
     }));
     game.deck.splice(0, 12);
+    setTurnStartSnapshot(game);
 
     game.currentPlayer = game.playerIds.playerOne;
 
@@ -183,6 +325,8 @@ io.on('connection', (socket) => {
       hand: game.playerHands.playerOne,
       table: game.tableCards,
       opponentCards: game.playerHands.playerTwo.length,
+      playerName: game.playerNames.playerOne,
+      opponentName: game.playerNames.playerTwo,
       gameCode: code
     });
     io.to(game.playerIds.playerTwo).emit('wait', {
@@ -190,11 +334,18 @@ io.on('connection', (socket) => {
       hand: game.playerHands.playerTwo,
       table: game.tableCards,
       opponentCards: game.playerHands.playerOne.length,
+      playerName: game.playerNames.playerTwo,
+      opponentName: game.playerNames.playerOne,
       gameCode: code
     });
 
     if (typeof cb === 'function') cb({ ok: true, code });
-    io.to(code).emit('joined', { message: 'Both players connected', code });
+    io.to(code).emit('joined', {
+      message: 'Both players connected',
+      code,
+      playerName: game.playerNames.playerOne,
+      opponentName: game.playerNames.playerTwo
+    });
   });
 
   socket.on('play card', (payload) => {
@@ -225,7 +376,9 @@ io.on('connection', (socket) => {
       stackId: payload.stackId,
       from: payload.from,
       to: payload.to,
-      stackAsSum: payload.stackAsSum
+      stackAsSum: payload.stackAsSum,
+      playerName: game.playerNames[playerKey] || payload.playerName || 'Player',
+      opponentName: game.playerNames[opponentKey] || 'Opponent',
     };
 
     // For grab and stack, send stack info BEFORE state changes
@@ -248,8 +401,25 @@ io.on('connection', (socket) => {
     // Track last grabber for end-of-round collection
     if (payload.type === 'grab') {
       game.lastGrabber = playerKey;
+      game.turnLastActionStackId = payload.stackId || null;
     }
 
+    if (payload.type === 'boardstack') {
+      if (!Array.isArray(game.turnBoardstackHistory)) {
+        game.turnBoardstackHistory = [];
+      }
+      const fromStackBefore = game.tableCards.find(stack => stack.id === payload.from);
+      const toStackBefore = game.tableCards.find(stack => stack.id === payload.to);
+      game.turnBoardstackHistory.push({
+        historyId: `${Date.now()}-${game.turnBoardstackHistory.length}`,
+        fromStackId: payload.from,
+        toStackId: payload.to,
+        stackAsSum: !!payload.stackAsSum,
+        stackNumber: toStackBefore ? toStackBefore.stackNumber : null,
+        fromCards: fromStackBefore ? fromStackBefore.cards.map(card => ({ ...card })) : []
+      });
+    }
+    
     const { newState, prompt, error } = validateAndApplyAction(game, payload, playerKey);
 
     if (error) return socket.emit('status', error);
@@ -258,6 +428,16 @@ io.on('connection', (socket) => {
     }
     if (newState) {
       games[gameCode] = newState;
+
+      if (payload.type !== 'boardstack') {
+        const finalTargetId = payload.type === 'normal'
+          ? game.tableCards[game.tableCards.length - 1]?.id
+          : payload.type === 'grab'
+            ? null
+            : payload.stackId || null;
+
+        restoreTableAfterTurn(game, finalTargetId);
+      }
 
       if (game.tableCards.length === 0) {
         game.tableens[playerKey] = (game.tableens[playerKey] || 0) + 1;
@@ -287,6 +467,8 @@ io.on('connection', (socket) => {
             opponentCards: game.collected.playerTwo,
             myTableens: game.tableens.playerOne,
             opponentTableens: game.tableens.playerTwo,
+            playerName: game.playerNames.playerOne,
+            opponentName: game.playerNames.playerTwo,
             score: { myScore: game.points.playerOne, opponentScore: game.points.playerTwo }
           });
           io.to(game.playerIds.playerTwo).emit('round over', {
@@ -295,6 +477,8 @@ io.on('connection', (socket) => {
             opponentCards: game.collected.playerOne,
             myTableens: game.tableens.playerTwo,
             opponentTableens: game.tableens.playerOne,
+            playerName: game.playerNames.playerTwo,
+            opponentName: game.playerNames.playerOne,
             score: { myScore: game.points.playerTwo, opponentScore: game.points.playerOne }
           });
           const SCORE_TO_WIN = 21;
@@ -328,6 +512,7 @@ io.on('connection', (socket) => {
           game.collected.playerTwo = [];
           game.nextStackId = 1;
           game.lastGrabber = null;
+          setTurnStartSnapshot(game);
 
           // --- SWAP WHO STARTS EACH ROUND ---
           if (!game.roundStarter || game.roundStarter === 'playerOne') {
@@ -371,11 +556,14 @@ io.on('connection', (socket) => {
       // --- EMIT TURN INFO ---
       if (payload.type !== 'boardstack') {
         game.currentPlayer = game.playerIds[opponentKey];
+        setTurnStartSnapshot(game);
         io.to(game.currentPlayer).emit('your turn', {
           ...game,
           hand: game.playerHands[opponentKey],
           table: game.tableCards,
           opponentCards: game.playerHands[playerKey].length,
+          playerName: game.playerNames[opponentKey],
+          opponentName: game.playerNames[playerKey],
           gameCode
         });
         io.to(socket.id).emit('wait', {
@@ -383,6 +571,8 @@ io.on('connection', (socket) => {
           hand: game.playerHands[playerKey],
           table: game.tableCards,
           opponentCards: game.playerHands[opponentKey].length,
+          playerName: game.playerNames[playerKey],
+          opponentName: game.playerNames[opponentKey],
           gameCode
         });
       } else {
@@ -391,6 +581,8 @@ io.on('connection', (socket) => {
           hand: game.playerHands[playerKey],
           table: game.tableCards,
           opponentCards: game.playerHands[playerKey === 'playerOne' ? 'playerTwo' : 'playerOne'].length,
+          playerName: game.playerNames[playerKey],
+          opponentName: game.playerNames[playerKey === 'playerOne' ? 'playerTwo' : 'playerOne'],
           gameCode
         });
       }

@@ -450,7 +450,7 @@ header {
 }
 
 #opponentLastAction {
-  color: var(--color-modal-text);
+  color: var(--color-bg);
 }
 
 #bugReport {
