@@ -2,8 +2,6 @@
 :root {
   --accent: #0a84ff;
   --radius: 12px;
-
-  /* Dark theme defaults */
   --color-bg: #0e0f12; /* neutral charcoal */
   --color-bg-light: #16171a; /* slightly lighter neutral */
   --color-border: #e8e8ea; /* off-white neutral */
@@ -27,31 +25,6 @@
   --color-mini-card-text: #e8e8ea;
 }
 
-/* Light theme overrides */
-:root[data-theme="light"] {
-  --color-bg: #f6f8fb;
-  --color-bg-light: #ffffff;
-  --color-border: #0c1629;
-  --color-muted: #4b5a74;
-  --color-stack-border: #d7dfeb;
-  --color-stack-bg: #ffffff;
-  --color-modal-bg: #ffffff;
-  --color-modal-text: #0c1629;
-  --color-modal-shadow: rgba(0,0,0,0.15);
-  --color-btn-bg: color-mix(in oklab, var(--accent) 70%, white);
-  --color-btn-bg-hover: color-mix(in oklab, var(--accent) 85%, white);
-  --color-btn-text: #0c1629;
-  --color-card-border: #d7dfeb;
-  --color-card-shadow: rgba(0, 0, 0, 0.08);
-  --color-debug-bg: rgba(255,255,255,0.85);
-  --color-debug-text: #0c1629;
-  --color-stack-number: #0c1629;
-  --color-stack-number-shadow: rgba(255,255,255,0.5);
-  --color-mini-card-border: #cbd6e6;
-  --color-mini-card-bg: #ffffff;
-  --color-mini-card-text: #0c1629;
-}
-
 /* General styles */
 html, body {
   margin: 0;
@@ -59,6 +32,7 @@ html, body {
   font-family: 'Verdana', sans-serif;
   background-color: var(--color-bg);
   color: var(--color-border);
+  color-scheme: dark;
 }
 
 header {
@@ -367,51 +341,6 @@ header {
   border: 1px solid var(--color-stack-border);
   background: var(--color-bg-light);
   color: var(--color-border);
-}
-.theme-options {
-  display: flex;
-  gap: 8px;
-}
-.theme-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--color-stack-border);
-  background: var(--color-bg-light);
-  padding: 8px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-}
-.theme-pill input { accent-color: var(--accent); }
-
-.accent-picker {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.accent-picker input[type="color"] {
-  width: 42px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid var(--color-stack-border);
-  background: transparent;
-  border-radius: 8px;
-}
-.accent-picker .swatches {
-  display: flex;
-  gap: 8px;
-}
-.accent-picker .swatches button {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 2px solid #fff8;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-  background: var(--sw);
-  cursor: pointer;
-}
-.accent-picker .swatches button:focus-visible {
-  outline: 2px solid var(--accent);
 }
 
 /* Make card summaries wrap nicely */

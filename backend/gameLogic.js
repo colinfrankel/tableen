@@ -143,6 +143,8 @@ function validateAndApplyAction(gameState, action, playerKey) {
     }
     gameState.collected[playerKey].push(...grabbedStack.cards);
 
+    console.log(gameState.collected)
+
     return { newState: gameState };
   }
 

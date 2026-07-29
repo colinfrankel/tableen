@@ -377,6 +377,15 @@ function setLoading(active, text) {
 // --- Firestore helpers for user sync ---
 function getFS() { return (window._firestore) || (window.firebase && firebase.firestore && firebase.firestore()) || null; }
 function getAuth() { return (window.firebase && firebase.auth && firebase.auth()) || null; }
+function normalizeUserProfile(data = {}, { stampUpdatedAt = false } = {}) {
+  return {
+    name: (data.name || 'Player').trim().slice(0, 18),
+    wins: Number(data.wins || 0),
+    games: Number(data.games || 0),
+    createdAt: data.createdAt || Date.now(),
+    updatedAt: stampUpdatedAt ? Date.now() : (data.updatedAt || data.createdAt || Date.now())
+  };
+}
 async function waitForUid() {
   const auth = getAuth();
   if (!auth) return null;
@@ -387,11 +396,11 @@ async function waitForUid() {
 }
 async function getUserDoc(uid) {
   const db = getFS(); if (!db) return null;
-  try { const snap = await db.collection('users').doc(uid).get(); return snap.exists ? (snap.data() || null) : null; } catch { return null; }
+  try { const snap = await db.collection('users').doc(uid).get(); return snap.exists ? normalizeUserProfile(snap.data() || {}) : null; } catch { return null; }
 }
 async function upsertUserDoc(uid, data) {
   const db = getFS(); if (!db) return;
-  try { await db.collection('users').doc(uid).set({ ...data, updatedAt: Date.now() }, { merge: true }); } catch { }
+  try { await db.collection('users').doc(uid).set(normalizeUserProfile(data, { stampUpdatedAt: true }), { merge: true }); } catch { }
 }
 async function findUserByName(name) {
   const db = getFS(); if (!db) return null;
@@ -409,7 +418,7 @@ async function findUserByName(name) {
     });
     // Return the most recently updated one
     const doc = q.docs[0];
-    return doc.data() || null;
+    return normalizeUserProfile(doc.data() || {});
   } catch (err) {
     console.error('Error in findUserByName:', err);
     return null;
@@ -946,11 +955,6 @@ function updateDebugInfo({ gameCode, extra, score, opponentName }) {
   `;
 }
 
-// Profile & Theme persistence
-function applyTheme(theme, accent) {
-  document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
-  if (accent) document.documentElement.style.setProperty('--accent', accent);
-}
 function updateUserBadge(profile) {
   const badge = document.getElementById('userBadge');
   if (!badge) return;
@@ -970,10 +974,6 @@ async function bootstrapUserFlow() {
   const signInOverlay = document.getElementById('signInOverlay');
   const welcomeOverlay = document.getElementById('welcomeOverlay');
   const nameInput = document.getElementById('playerNameInput');
-  const accentPicker = document.getElementById('accentPicker');
-  const swatches = document.getElementById('accentSwatches');
-  const saveBtn = document.getElementById('saveWelcome');
-  const themeInputs = document.querySelectorAll('input[name="theme"]');
   const signInBtn = document.getElementById('signInBtn');
   const newUserBtn = document.getElementById('newUserBtn');
   const signInNameInput = document.getElementById('signInNameInput');
@@ -986,21 +986,9 @@ async function bootstrapUserFlow() {
   CURRENT_USER = await getUserDoc(uid);
   setLoading(false);
 
-  // Always set up live preview and save button logic
-  function setThemePreview() {
-    const selectedTheme = [...themeInputs].find(r => r.checked)?.value || 'dark';
-    const acc = accentPicker?.value || '#0a84ff';
-    applyTheme(selectedTheme, acc);
+  function setNameFromProfile(profile) {
+    if (nameInput) nameInput.value = profile?.name || '';
   }
-  if (swatches) {
-    swatches.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-color]');
-      if (!btn || !accentPicker) return;
-      accentPicker.value = btn.dataset.color; setThemePreview();
-    });
-  }
-  accentPicker?.addEventListener('input', setThemePreview);
-  themeInputs.forEach(r => r.addEventListener('change', setThemePreview));
 
   // Helper to attach save button logic
   function attachSaveBtnListener() {
@@ -1014,23 +1002,18 @@ async function bootstrapUserFlow() {
       try {
         setLoading(true, 'Saving…');
         const enteredName = (nameInput?.value || '').trim().slice(0, 18) || 'Player';
-        const theme = [...themeInputs].find(r => r.checked)?.value || 'dark';
-        const accent = accentPicker?.value || '#0a84ff';
 
         // If there is an existing user with this name, adopt their data
         let base = await findUserByName(enteredName);
         const initData = {
           name: enteredName,
-          theme,
-          accent,
           wins: base?.wins || 0,
           games: base?.games || 0,
-          createdAt: Date.now(),
+          createdAt: base?.createdAt || Date.now(),
           updatedAt: Date.now()
         };
         await upsertUserDoc(uid, initData);
         CURRENT_USER = { ...initData };
-        applyTheme(theme, accent);
         updateUserBadge(CURRENT_USER);
         await syncLeaderboardProfile(CURRENT_USER);
         welcomeOverlay?.classList.add('hidden');
@@ -1047,26 +1030,22 @@ async function bootstrapUserFlow() {
     attachSaveBtnListener();
   }
 
-  // Settings button opens overlay with current user
+  // Profile button opens overlay with current user
   const openSettings = document.getElementById('openSettings');
   if (openSettings) {
     openSettings.addEventListener('click', () => {
       if (!CURRENT_USER) return; // require loaded user
-      if (nameInput) nameInput.value = CURRENT_USER.name || '';
-      if (accentPicker) accentPicker.value = CURRENT_USER.accent || '#0a84ff';
-      const themeVal = CURRENT_USER.theme || 'dark';
-      const themeInputs = document.querySelectorAll('input[name="theme"]');
-      themeInputs.forEach(r => r.checked = (r.value === themeVal));
+      setNameFromProfile(CURRENT_USER);
       welcomeOverlay?.classList.remove('hidden');
       attachSaveBtnListener();
     });
   }
 
-  // If user already exists, just apply theme and badge
+  // If user already exists, just apply badge
   if (CURRENT_USER) {
-    applyTheme(CURRENT_USER.theme || 'dark', CURRENT_USER.accent || '#0a84ff');
     updateUserBadge(CURRENT_USER);
     attachSaveBtnListener();
+    await syncLeaderboardProfile(CURRENT_USER);
     return;
   }
 
@@ -1103,7 +1082,6 @@ async function bootstrapUserFlow() {
     // Adopt found user data
     await upsertUserDoc(uid, userDoc);
     CURRENT_USER = { ...userDoc };
-    applyTheme(userDoc.theme || 'dark', userDoc.accent || '#0a84ff');
     updateUserBadge(CURRENT_USER);
     await syncLeaderboardProfile(CURRENT_USER);
     signInOverlay.classList.add('hidden');
