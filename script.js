@@ -380,6 +380,8 @@ function getAuth() { return (window.firebase && firebase.auth && firebase.auth()
 function normalizeUserProfile(data = {}, { stampUpdatedAt = false } = {}) {
   return {
     name: (data.name || 'Player').trim().slice(0, 18),
+    name_lc: ((data.name || 'Player').trim().slice(0, 18)).toLowerCase(),
+    uuid: data.uuid || null,
     wins: Number(data.wins || 0),
     games: Number(data.games || 0),
     createdAt: data.createdAt || Date.now(),
@@ -400,25 +402,45 @@ async function getUserDoc(uid) {
 }
 async function upsertUserDoc(uid, data) {
   const db = getFS(); if (!db) return;
-  try { await db.collection('users').doc(uid).set(normalizeUserProfile(data, { stampUpdatedAt: true }), { merge: true }); } catch { }
+  try {
+    const prof = normalizeUserProfile(data, { stampUpdatedAt: true });
+    prof.uuid = uid;
+    await db.collection('users').doc(uid).set(prof, { merge: true });
+  } catch { }
 }
 async function findUserByName(name) {
   const db = getFS(); if (!db) return null;
   const n = (name || '').trim(); if (!n) return null;
   try {
-    console.log('Querying for user by name:', n);
-    const q = await db.collection('users').where('name', '==', n).get();
+    console.log('Querying for user by name (case-insensitive):', n);
+    const nLower = n.toLowerCase();
+    // First try case-insensitive field
+    let q = await db.collection('users').where('name_lc', '==', nLower).orderBy('updatedAt', 'desc').limit(1).get();
     if (q.empty) {
+      // Fallback: older records might not have name_lc, try exact match on `name`
+      q = await db.collection('users').where('name', '==', n).orderBy('updatedAt', 'desc').limit(1).get();
+    }
+    if (q.empty) {
+      // Final fallback: scan a subset of user docs client-side and compare normalized names
+      // This catches legacy auto-id docs that weren't migrated to `name_lc`.
+      try {
+        const scanLimit = 500; // guard so we don't fetch entire collection
+        const scanSnap = await db.collection('users').limit(scanLimit).get();
+        for (const sd of scanSnap.docs) {
+          const data = sd.data() || {};
+          const candidate = ((data.name || '') + '').trim().toLowerCase();
+          if (candidate === nLower) {
+            return { id: sd.id, profile: normalizeUserProfile(data) };
+          }
+        }
+      } catch (scanErr) {
+        console.warn('Fallback scan failed:', scanErr);
+      }
       console.log('No users found with that name.');
       return null;
     }
-    // Log all found docs
-    q.docs.forEach((doc, idx) => {
-      console.log(`User doc #${idx + 1}:`, doc.data());
-    });
-    // Return the most recently updated one
     const doc = q.docs[0];
-    return normalizeUserProfile(doc.data() || {});
+    return { id: doc.id, profile: normalizeUserProfile(doc.data() || {}) };
   } catch (err) {
     console.error('Error in findUserByName:', err);
     return null;
@@ -1002,17 +1024,44 @@ async function bootstrapUserFlow() {
       try {
         setLoading(true, 'Saving…');
         const enteredName = (nameInput?.value || '').trim().slice(0, 18) || 'Player';
+        // Ensure we have a current auth UID (try anonymous sign-in if necessary)
+        let auth = getAuth();
+        let currentUid = auth && auth.currentUser ? auth.currentUser.uid : null;
+        if (!currentUid && auth && typeof auth.signInAnonymously === 'function') {
+          try {
+            await auth.signInAnonymously();
+            currentUid = auth.currentUser ? auth.currentUser.uid : await waitForUid();
+          } catch (e) {
+            console.warn('Anonymous sign-in failed:', e);
+          }
+        }
+        if (!currentUid) {
+          showStatusModal('Unable to acquire authentication identity. Please sign in and try again.');
+          setLoading(false);
+          newBtn.disabled = false;
+          return;
+        }
 
-        // If there is an existing user with this name, adopt their data
-        let base = await findUserByName(enteredName);
+        // Check for existing user with same name
+        const existing = await findUserByName(enteredName);
+        if (existing && existing.id && existing.id !== currentUid) {
+          // Name taken by another account
+          showStatusModal('That name is already taken. Please choose a different name.');
+          setLoading(false);
+          newBtn.disabled = false;
+          return;
+        }
+
+        // If existing exists and matches this uid, preserve their createdAt and stats
+        const baseProfile = existing && existing.id === currentUid ? existing.profile : null;
         const initData = {
           name: enteredName,
-          wins: base?.wins || 0,
-          games: base?.games || 0,
-          createdAt: base?.createdAt || Date.now(),
+          wins: baseProfile?.wins || 0,
+          games: baseProfile?.games || 0,
+          createdAt: baseProfile?.createdAt || Date.now(),
           updatedAt: Date.now()
         };
-        await upsertUserDoc(uid, initData);
+        await upsertUserDoc(currentUid, initData);
         CURRENT_USER = { ...initData };
         updateUserBadge(CURRENT_USER);
         await syncLeaderboardProfile(CURRENT_USER);
@@ -1072,16 +1121,27 @@ async function bootstrapUserFlow() {
       return;
     }
     setLoading(true, 'Signing in…');
-    let userDoc = await findUserByName(enteredName);
+    const found = await findUserByName(enteredName);
     setLoading(false);
-    if (!userDoc) {
+    if (!found) {
       signInError.textContent = 'No user found with that name.';
       signInError.style.display = 'block';
       return;
     }
-    // Adopt found user data
-    await upsertUserDoc(uid, userDoc);
-    CURRENT_USER = { ...userDoc };
+    // Get current auth uid (may have changed since bootstrap)
+    let auth = getAuth();
+    let currentUid = auth && auth.currentUser ? auth.currentUser.uid : null;
+    if (!currentUid && auth && typeof auth.signInAnonymously === 'function') {
+      try { await auth.signInAnonymously(); currentUid = auth.currentUser ? auth.currentUser.uid : await waitForUid(); } catch (e) { console.warn('Anonymous sign-in failed:', e); }
+    }
+    // If the found record belongs to a different auth UID, disallow claiming it
+    if (found.id !== currentUid) {
+      signInError.textContent = 'That name belongs to another account. If this is your account, sign in with the same device/account you used originally.';
+      signInError.style.display = 'block';
+      return;
+    }
+    // Load user's profile from their uid-doc
+    CURRENT_USER = { ...found.profile };
     updateUserBadge(CURRENT_USER);
     await syncLeaderboardProfile(CURRENT_USER);
     signInOverlay.classList.add('hidden');
