@@ -414,11 +414,25 @@ async function findUserByName(name) {
   try {
     console.log('Querying for user by name (case-insensitive):', n);
     const nLower = n.toLowerCase();
-    // First try case-insensitive field
-    let q = await db.collection('users').where('name_lc', '==', nLower).orderBy('updatedAt', 'desc').limit(1).get();
+    // First check username mapping collection for a direct owner mapping
+    try {
+      const nameRef = db.collection('usernames').doc(nLower);
+      const nameSnap = await nameRef.get();
+      if (nameSnap.exists) {
+        const ownerUid = nameSnap.data().uid;
+        if (ownerUid) {
+          const userSnap = await db.collection('users').doc(ownerUid).get();
+          if (userSnap.exists) return { id: userSnap.id, profile: normalizeUserProfile(userSnap.data() || {}) };
+        }
+      }
+    } catch (e) {
+      console.warn('username mapping lookup failed:', e);
+    }
+    // First try case-insensitive field (simple equality + limit — avoids composite index)
+    let q = await db.collection('users').where('name_lc', '==', nLower).limit(1).get();
     if (q.empty) {
       // Fallback: older records might not have name_lc, try exact match on `name`
-      q = await db.collection('users').where('name', '==', n).orderBy('updatedAt', 'desc').limit(1).get();
+      q = await db.collection('users').where('name', '==', n).limit(1).get();
     }
     if (q.empty) {
       // Final fallback: scan a subset of user docs client-side and compare normalized names
@@ -444,6 +458,91 @@ async function findUserByName(name) {
   } catch (err) {
     console.error('Error in findUserByName:', err);
     return null;
+  }
+}
+
+// Try to claim a username (name_lc) for a uid using a transaction. Returns true on success, false if owned by someone else.
+async function claimUsername(name, uid) {
+  const db = getFS(); if (!db) return false;
+  const n = (name || '').trim(); if (!n) return false;
+  const nLower = n.toLowerCase();
+  const nameRef = db.collection('usernames').doc(nLower);
+  console.log('claimUsername:', { name: n, name_lc: nLower, uid });
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(nameRef);
+      if (snap.exists) {
+        const data = snap.data() || {};
+        if (data.uid && data.uid !== uid) {
+          throw new Error('taken');
+        }
+        // If exists and owned by same uid, refresh timestamp
+        tx.set(nameRef, { uid, name: n, name_lc: nLower, updatedAt: Date.now() }, { merge: true });
+      } else {
+        tx.set(nameRef, { uid, name: n, name_lc: nLower, createdAt: Date.now(), updatedAt: Date.now() });
+      }
+    });
+    return true;
+  } catch (err) {
+    if (String(err).includes('taken')) return false;
+    console.warn('claimUsername transaction failed, falling back to create:', err);
+    // Fallback: try to create the mapping doc directly (create() will fail if doc exists)
+    try {
+      if (typeof nameRef.create === 'function') {
+        await nameRef.create({ uid, name: n, name_lc: nLower, createdAt: Date.now(), updatedAt: Date.now() });
+        return true;
+      } else {
+        // Older SDKs may not support create(); emulate with get+set but check existence
+        const snap = await nameRef.get();
+        if (snap.exists) {
+          const data = snap.data() || {};
+          if (data.uid && data.uid !== uid) return false;
+          await nameRef.set({ uid, name: n, name_lc: nLower, updatedAt: Date.now() }, { merge: true });
+          return true;
+        } else {
+          await nameRef.set({ uid, name: n, name_lc: nLower, createdAt: Date.now(), updatedAt: Date.now() });
+          return true;
+        }
+      }
+    } catch (err2) {
+      const s = String(err2 || '').toLowerCase();
+      if (s.includes('already-exists') || s.includes('already exists') || s.includes('already-exists')) return false;
+      console.warn('claimUsername fallback create failed:', err2);
+      return false;
+    }
+  }
+}
+
+async function getUsernameOwner(name) {
+  const db = getFS(); if (!db) return null;
+  const n = (name || '').trim(); if (!n) return null;
+  const nLower = n.toLowerCase();
+  try {
+    const snap = await db.collection('usernames').doc(nLower).get();
+    if (snap.exists) return snap.data().uid || null;
+    return null;
+  } catch (e) {
+    console.warn('getUsernameOwner failed:', e);
+    return null;
+  }
+}
+
+async function releaseUsername(name, uid) {
+  const db = getFS(); if (!db) return false;
+  const n = (name || '').trim(); if (!n) return false;
+  const nLower = n.toLowerCase();
+  const ref = db.collection('usernames').doc(nLower);
+  try {
+    const snap = await ref.get();
+    if (!snap.exists) return true;
+    const data = snap.data() || {};
+    if (data.uid && data.uid === uid) {
+      await ref.delete();
+    }
+    return true;
+  } catch (e) {
+    console.warn('releaseUsername failed:', e);
+    return false;
   }
 }
 async function incrementStats(winInc, gameInc) {
@@ -1042,10 +1141,19 @@ async function bootstrapUserFlow() {
           return;
         }
 
-        // Check for existing user with same name
+        // Check for existing user with same name (fast path via username mapping)
         const existing = await findUserByName(enteredName);
         if (existing && existing.id && existing.id !== currentUid) {
           // Name taken by another account
+          showStatusModal('That name is already taken. Please choose a different name.');
+          setLoading(false);
+          newBtn.disabled = false;
+          return;
+        }
+
+        // Try to claim the username mapping transactionally
+        const claimed = await claimUsername(enteredName, currentUid);
+        if (!claimed) {
           showStatusModal('That name is already taken. Please choose a different name.');
           setLoading(false);
           newBtn.disabled = false;
@@ -1062,6 +1170,14 @@ async function bootstrapUserFlow() {
           updatedAt: Date.now()
         };
         await upsertUserDoc(currentUid, initData);
+        // If user changed names (had an old mapping), release the old username mapping
+        try {
+          const oldLower = (CURRENT_USER && CURRENT_USER.name_lc) ? CURRENT_USER.name_lc : null;
+          const newLower = (enteredName || '').trim().toLowerCase();
+          if (oldLower && oldLower !== newLower) {
+            await releaseUsername(oldLower, currentUid);
+          }
+        } catch (e) { console.warn('failed to release old username mapping', e); }
         CURRENT_USER = { ...initData };
         updateUserBadge(CURRENT_USER);
         await syncLeaderboardProfile(CURRENT_USER);
