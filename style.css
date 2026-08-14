@@ -117,6 +117,28 @@ header {
   color: var(--color-border);
 }
 
+#joinCodeDigits {
+  display: flex;
+  gap: 8px;
+}
+
+.join-digit {
+  width: 44px;
+  height: 48px;
+  text-align: center;
+  font-size: 1.2em;
+  border-radius: 8px;
+  border: 1px solid var(--color-stack-border);
+  background: var(--color-bg-light);
+  color: var(--color-border);
+  outline: none;
+}
+
+.join-digit:focus {
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(10,132,255,0.12);
+}
+
 #createContainer, #joinContainer {
   border: 1px solid var(--color-stack-border);
   border-radius: 8px;

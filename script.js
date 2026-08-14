@@ -93,11 +93,69 @@ joinBtn.addEventListener('click', () => {
   });
 });
 
-joinCodeInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    joinBtn.click();
+// Replace single-input Enter handling with a 5-digit join-code UI that supports typing and paste
+function setupJoinCodeInputs() {
+  const hiddenInput = document.getElementById('joinCode');
+  const digitEls = Array.from(document.querySelectorAll('.join-digit'));
+  if (!hiddenInput || digitEls.length !== 5) return;
+
+  function updateHidden() {
+    hiddenInput.value = digitEls.map(d => (d.value || '')).join('').toUpperCase();
   }
-});
+
+  digitEls.forEach((el, idx) => {
+    el.addEventListener('input', (e) => {
+      const v = (el.value || '').replace(/[^0-9A-Za-z]/g, '').slice(-1);
+      el.value = v;
+      updateHidden();
+      if (v && idx < digitEls.length - 1) digitEls[idx + 1].focus();
+    });
+
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace') {
+        if (!el.value && idx > 0) {
+          digitEls[idx - 1].focus();
+          digitEls[idx - 1].value = '';
+          updateHidden();
+          e.preventDefault();
+        }
+      } else if (e.key === 'ArrowLeft' && idx > 0) {
+        digitEls[idx - 1].focus();
+        e.preventDefault();
+      } else if (e.key === 'ArrowRight' && idx < digitEls.length - 1) {
+        digitEls[idx + 1].focus();
+        e.preventDefault();
+      } else if (e.key === 'Enter') {
+        joinBtn.click();
+      }
+    });
+  });
+
+  const container = document.getElementById('joinCodeDigits');
+  container.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text') || '';
+    const raw = text.replace(/\s+/g, '').slice(0, 5);
+    for (let i = 0; i < 5; i++) digitEls[i].value = raw[i] || '';
+    updateHidden();
+    const firstEmpty = digitEls.find(d => !d.value) || digitEls[digitEls.length - 1];
+    firstEmpty.focus();
+  });
+
+  // Support paste into hidden input (for compatibility)
+  hiddenInput.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text') || '';
+    const raw = text.replace(/\s+/g, '').slice(0, 5);
+    for (let i = 0; i < 5; i++) digitEls[i].value = raw[i] || '';
+    updateHidden();
+  });
+
+  // initial focus
+  digitEls[0].setAttribute('inputmode', 'numeric');
+}
+
+setupJoinCodeInputs();
 
 function showGameCode(code) {
   gameCodeSpan.innerText = code;

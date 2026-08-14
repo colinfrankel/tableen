@@ -39,8 +39,15 @@
         </div>
         <div class="divider">OR</div>
         <div id="joinContainer">
-          <input id="joinCode" placeholder="Enter Game Code" maxlength="5" autocomplete="off" autocorrect="off"
-            autocapitalize="off" spellcheck="false" />
+          <div id="joinCodeDigits" aria-label="Enter game code" role="group">
+            <input class="join-digit" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="0" aria-label="code digit 1" />
+            <input class="join-digit" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="1" aria-label="code digit 2" />
+            <input class="join-digit" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="2" aria-label="code digit 3" />
+            <input class="join-digit" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="3" aria-label="code digit 4" />
+            <input class="join-digit" inputmode="numeric" pattern="[0-9]*" maxlength="1" data-index="4" aria-label="code digit 5" />
+          </div>
+          <!-- Hidden single input kept for compatibility with existing JS callers -->
+          <input id="joinCode" type="text" maxlength="5" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="hidden" />
           <button id="joinBtn">Join Game</button>
         </div>
       </div>

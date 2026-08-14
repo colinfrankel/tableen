@@ -1,0 +1,7 @@
+# Ignore node modules inside backend so Jekyll doesn't try to render their README files
+backend/node_modules
+backend/**/node_modules
+
+# Also ignore other typical development folders
+node_modules
+.DS_Store
