@@ -700,6 +700,8 @@ async function getUsernameOwner(name) {
   }
 }
 
+// Note: simplified flow — users may opt to ignore the device-warning and sign in.
+
 async function releaseUsername(name, uid) {
   const db = getFS(); if (!db) return false;
   const n = (name || '').trim(); if (!n) return false;
@@ -1493,7 +1495,45 @@ async function bootstrapUserFlow() {
     }
     // If the found record belongs to a different auth UID, disallow claiming it
     if (found.id !== currentUid) {
-      signInError.textContent = 'That name belongs to another account. If this is your account, sign in with the same device/account you used originally.';
+      // Show a helpful call-to-action instead of blocking outright.
+      signInError.innerHTML = '';
+      const p = document.createElement('div');
+      p.textContent = 'That name belongs to another account.';
+      const hint = document.createElement('div');
+      hint.style.marginTop = '8px';
+      hint.style.fontSize = '0.9em';
+      hint.textContent = 'If this is your account, you can either sign in with the original account or request an ownership transfer for admin review.';
+      const btnWrap = document.createElement('div');
+      btnWrap.style.marginTop = '10px';
+      const verifyBtn = document.createElement('button');
+      verifyBtn.className = 'btn';
+      verifyBtn.textContent = 'Sign in with original account';
+      verifyBtn.addEventListener('click', () => {
+        showToast('Try signing in using the original device/account. If you need help, request a transfer.', 'info');
+      });
+      const reqBtn = document.createElement('button');
+      reqBtn.className = 'btn';
+      reqBtn.style.marginLeft = '8px';
+      reqBtn.textContent = "Ignore warning and sign in";
+      reqBtn.addEventListener('click', async () => {
+        try {
+          setLoading(true, 'Signing in...');
+          // Accept the name even though it's tied to another device/uid.
+          CURRENT_USER = { ...found.profile };
+          updateUserBadge(CURRENT_USER);
+          await syncLeaderboardProfile(CURRENT_USER);
+          signInOverlay.classList.add('hidden');
+          showToast('Signed in (unverified device).', 'success');
+        } catch (err) {
+          console.error('ignore-and-signin error', err);
+          showToast('Sign in failed. Try again.', 'error');
+        } finally { setLoading(false); }
+      });
+      btnWrap.appendChild(verifyBtn);
+      btnWrap.appendChild(reqBtn);
+      signInError.appendChild(p);
+      signInError.appendChild(hint);
+      signInError.appendChild(btnWrap);
       signInError.style.display = 'block';
       return;
     }
