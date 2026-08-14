@@ -240,16 +240,37 @@ io.on('connection', (socket) => {
     }
 
     let playerKey = null;
-    // Assign player slot based on disconnected status
-    if (!game.playerIds.playerOne || !io.sockets.sockets.get(game.playerIds.playerOne)) {
-      game.playerIds.playerOne = socket.id;
-      playerKey = 'playerOne';
-    } else if (!game.playerIds.playerTwo || !io.sockets.sockets.get(game.playerIds.playerTwo)) {
-      game.playerIds.playerTwo = socket.id;
-      playerKey = 'playerTwo';
-    } else {
-      if (typeof cb === 'function') cb({ ok: false, message: 'Game full' });
-      return;
+    const normalizedJoinerName = joinerName.trim().toLowerCase();
+
+    // Allow a returning player to reclaim their own slot even if the old socket is gone.
+    const samePlayerSlot =
+      (game.playerNames.playerOne && game.playerNames.playerOne.trim().toLowerCase() === normalizedJoinerName)
+        ? 'playerOne'
+        : ((game.playerNames.playerTwo && game.playerNames.playerTwo.trim().toLowerCase() === normalizedJoinerName)
+          ? 'playerTwo'
+          : null);
+
+    if (samePlayerSlot) {
+      const currentOwner = game.playerIds[samePlayerSlot];
+      const currentOwnerConnected = currentOwner && io.sockets.sockets.get(currentOwner);
+      if (!currentOwner || !currentOwnerConnected || currentOwner === socket.id) {
+        game.playerIds[samePlayerSlot] = socket.id;
+        playerKey = samePlayerSlot;
+      }
+    }
+
+    // Fallback: assign any free/disconnected slot.
+    if (!playerKey) {
+      if (!game.playerIds.playerOne || !io.sockets.sockets.get(game.playerIds.playerOne)) {
+        game.playerIds.playerOne = socket.id;
+        playerKey = 'playerOne';
+      } else if (!game.playerIds.playerTwo || !io.sockets.sockets.get(game.playerIds.playerTwo)) {
+        game.playerIds.playerTwo = socket.id;
+        playerKey = 'playerTwo';
+      } else {
+        if (typeof cb === 'function') cb({ ok: false, message: 'Game full' });
+        return;
+      }
     }
 
     // After assigning playerKey and updating game.playerIds...
@@ -640,6 +661,14 @@ io.on('connection', (socket) => {
     const otherPlayerId = playerKey === 'playerOne' ? game.playerIds.playerTwo : game.playerIds.playerOne;
     if (otherPlayerId) {
       io.to(otherPlayerId).emit('opponent disconnected', { message: 'Opponent disconnected' });
+    }
+
+    // Clear the disconnected player's slot so they can rejoin cleanly.
+    if (game.playerIds.playerOne === socket.id) {
+      game.playerIds.playerOne = null;
+    }
+    if (game.playerIds.playerTwo === socket.id) {
+      game.playerIds.playerTwo = null;
     }
 
     // --- CLEAN UP GAME IF BOTH PLAYERS HAVE LEFT ---
