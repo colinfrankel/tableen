@@ -870,6 +870,7 @@ function clearSignedInProfile() {
 
 let draggedCardEl = null;
 let draggedTableCardEl = null;
+let activeTouchDrag = null;
 
 
 // drag/drop base handlers
@@ -889,6 +890,97 @@ document.body.addEventListener('drop', (e) => {
     draggedCard = null;
   }
 });
+
+function beginTouchDragFromHand(cardElement, card) {
+  draggedCardEl = cardElement;
+  draggedCardEl.classList.add('dragging');
+  draggedCard = { card: card.card, suit: card.suit, source: 'hand' };
+  activeTouchDrag = { type: 'hand' };
+
+  socket.emit('drag card', {
+    gameCode: currentGameCode,
+    card: draggedCard,
+    origin: 'opponentTop'
+  });
+}
+
+function beginTouchDragFromTable(cardElement, card, stackIndex, stackId) {
+  draggedTableCardEl = cardElement;
+  draggedTableCardEl.classList.add('dragging');
+  draggedTableCard = { card: card.card, suit: card.suit, source: 'table', stackIndex, stackId };
+  activeTouchDrag = { type: 'table' };
+
+  socket.emit('drag card', {
+    gameCode: currentGameCode,
+    card: draggedTableCard,
+    origin: 'table',
+    stackId
+  });
+}
+
+function cleanupTouchDrag() {
+  if (draggedCardEl) {
+    draggedCardEl.classList.remove('dragging');
+    draggedCardEl = null;
+  }
+  if (draggedTableCardEl) {
+    draggedTableCardEl.classList.remove('dragging');
+    draggedTableCardEl = null;
+  }
+  activeTouchDrag = null;
+  socket.emit('drag end', { gameCode: currentGameCode });
+}
+
+document.addEventListener('touchmove', (e) => {
+  if (!activeTouchDrag || !socket || !currentGameCode) return;
+  if (!e.touches || e.touches.length === 0) return;
+
+  const t = e.touches[0];
+  e.preventDefault();
+  socket.emit('drag move', {
+    gameCode: currentGameCode,
+    x: t.clientX,
+    y: t.clientY,
+    origin: activeTouchDrag.type === 'hand' ? 'hand' : 'table'
+  });
+}, { passive: false });
+
+function handleTouchEndLikeDrop(e) {
+  if (!activeTouchDrag) return;
+
+  let clientX = null;
+  let clientY = null;
+  if (e.changedTouches && e.changedTouches.length > 0) {
+    clientX = e.changedTouches[0].clientX;
+    clientY = e.changedTouches[0].clientY;
+  }
+
+  if (clientX !== null && clientY !== null) {
+    const el = document.elementFromPoint(clientX, clientY);
+    const stackEl = el ? el.closest('.stack') : null;
+    if (stackEl) {
+      stackEl.dispatchEvent(new Event('drop', { bubbles: true, cancelable: true }));
+      cleanupTouchDrag();
+      return;
+    }
+  }
+
+  // Fallback: dropping a hand card outside stacks should play as a normal card.
+  if (draggedCard) {
+    playCard({
+      type: 'normal',
+      gameCode: currentGameCode,
+      playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+      playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
+    });
+    draggedCard = null;
+  }
+
+  cleanupTouchDrag();
+}
+
+document.addEventListener('touchend', handleTouchEndLikeDrop, { passive: false });
+document.addEventListener('touchcancel', handleTouchEndLikeDrop, { passive: false });
 
 // Throttle drag-move emits to avoid flooding server
 let _lastDragEmit = 0;
@@ -923,6 +1015,7 @@ function updateGameUI(data, isYourTurn) {
     cardElement.src = getCardImageUrl({ ...card, card: displayCardValue }, { useAceAsOne: true });
     cardElement.classList.add('card');
     cardElement.setAttribute('draggable', true);
+    cardElement.style.touchAction = 'none';
 
     cardElement.addEventListener('dragstart', function (e) {
       draggedCardEl = cardElement;
@@ -945,6 +1038,12 @@ function updateGameUI(data, isYourTurn) {
         gameCode: currentGameCode
       });
     });
+
+    cardElement.addEventListener('touchstart', function (e) {
+      if (!e.touches || e.touches.length === 0) return;
+      e.preventDefault();
+      beginTouchDragFromHand(cardElement, { card: displayCardValue, suit: card.suit });
+    }, { passive: false });
 
     document.getElementById('cards').appendChild(cardElement);
   });
@@ -972,6 +1071,7 @@ function updateTableCards(tableCards, playerHand = []) {
     stackDiv.classList.add('stack');
     stackDiv.dataset.index = stackIndex;
     stackDiv.dataset.stackId = stackObj.id;
+    stackDiv.style.touchAction = 'none';
 
     // Render each card in the stack
     stackObj.cards.forEach((card, idx) => {
@@ -980,6 +1080,7 @@ function updateTableCards(tableCards, playerHand = []) {
       cardElement.classList.add('card');
       cardElement.style.setProperty('--stack-index', idx);
       cardElement.setAttribute('draggable', true);
+      cardElement.style.touchAction = 'none';
       cardElement.addEventListener('dragstart', (e) => {
         draggedTableCardEl = cardElement;
         cardElement.classList.add('dragging');
@@ -1002,6 +1103,12 @@ function updateTableCards(tableCards, playerHand = []) {
           gameCode: currentGameCode
         });
       });
+
+      cardElement.addEventListener('touchstart', (e) => {
+        if (!e.touches || e.touches.length === 0) return;
+        e.preventDefault();
+        beginTouchDragFromTable(cardElement, { card: card.card, suit: card.suit }, stackIndex, stackObj.id);
+      }, { passive: false });
 
       stackDiv.appendChild(cardElement);
     });
