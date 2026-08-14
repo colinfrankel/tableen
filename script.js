@@ -742,6 +742,39 @@ async function incrementStats(winInc, gameInc) {
 }
 
 let CURRENT_USER = null;
+const PROFILE_STORAGE_KEY = 'tableen-current-user';
+
+function persistSignedInProfile(profile) {
+  if (!profile || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  } catch (e) {
+    console.warn('Failed to persist signed-in profile:', e);
+  }
+}
+
+function restoreSignedInProfile() {
+  if (!window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && parsed.name ? parsed : null;
+  } catch (e) {
+    console.warn('Failed to restore signed-in profile:', e);
+    return null;
+  }
+}
+
+function clearSignedInProfile() {
+  if (!window.localStorage) return;
+  try {
+    window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+  } catch (e) {
+    console.warn('Failed to clear signed-in profile:', e);
+  }
+}
+
 let draggedCardEl = null;
 let draggedTableCardEl = null;
 
@@ -1355,9 +1388,18 @@ async function bootstrapUserFlow() {
   const signInCancelBtn = document.getElementById('signInCancelBtn');
   const signInError = document.getElementById('signInError');
 
+  const rememberedProfile = restoreSignedInProfile();
   const uid = await waitForUid();
   setLoading(true, 'Loading your data…');
-  CURRENT_USER = await getUserDoc(uid);
+  CURRENT_USER = uid ? await getUserDoc(uid) : null;
+  if (!CURRENT_USER && rememberedProfile) {
+    CURRENT_USER = rememberedProfile;
+  }
+  if (CURRENT_USER) {
+    persistSignedInProfile(CURRENT_USER);
+  } else {
+    clearSignedInProfile();
+  }
   setLoading(false);
 
   function setNameFromProfile(profile) {
@@ -1432,6 +1474,7 @@ async function bootstrapUserFlow() {
           }
         } catch (e) { console.warn('failed to release old username mapping', e); }
         CURRENT_USER = { ...initData };
+        persistSignedInProfile(CURRENT_USER);
         updateUserBadge(CURRENT_USER);
         await syncLeaderboardProfile(CURRENT_USER);
         welcomeOverlay?.classList.add('hidden');
@@ -1519,6 +1562,7 @@ async function bootstrapUserFlow() {
         try {
           setLoading(true, 'Signing in...');
           CURRENT_USER = { ...found.profile };
+          persistSignedInProfile(CURRENT_USER);
           updateUserBadge(CURRENT_USER);
           await syncLeaderboardProfile(CURRENT_USER);
           signInOverlay.classList.add('hidden');
@@ -1544,6 +1588,7 @@ async function bootstrapUserFlow() {
     }
     // Load user's profile from their uid-doc
     CURRENT_USER = { ...found.profile };
+    persistSignedInProfile(CURRENT_USER);
     updateUserBadge(CURRENT_USER);
     await syncLeaderboardProfile(CURRENT_USER);
     signInOverlay.classList.add('hidden');

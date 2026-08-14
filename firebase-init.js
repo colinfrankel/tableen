@@ -16,9 +16,24 @@
     return;
   }
   firebase.initializeApp(firebaseConfig);
-  // Sign in anonymously for per-user doc permissions
+  // Keep the anonymous auth session across reloads in the browser.
   if (firebase.auth) {
-    firebase.auth().signInAnonymously().catch(console.warn);
+    const auth = firebase.auth();
+    try {
+      auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+      auth.onAuthStateChanged((user) => {
+        try {
+          if (user && window.localStorage) {
+            window.localStorage.setItem('tableen-auth-uid', user.uid);
+          }
+        } catch (e) {}
+      });
+    } catch (e) {
+      console.warn('Firebase auth persistence setup failed:', e);
+    }
+    auth.signInAnonymously().catch((err) => {
+      console.warn('Anonymous sign-in skipped or blocked:', err);
+    });
   }
   // Expose Firestore handle globally with network safety settings
   if (firebase.firestore) {
