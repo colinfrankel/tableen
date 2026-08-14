@@ -245,6 +245,25 @@ function resolveOpponentName(data = {}) {
   return opponentName || playerName || 'Opponent';
 }
 
+function inferLocalPlayerKey(data = {}) {
+  const selfName = (CURRENT_USER?.name || '').trim().toLowerCase();
+
+  if (data.playerNames && typeof data.playerNames === 'object') {
+    const p1 = String(data.playerNames.playerOne || '').trim().toLowerCase();
+    const p2 = String(data.playerNames.playerTwo || '').trim().toLowerCase();
+    if (selfName && p1 === selfName) return 'playerOne';
+    if (selfName && p2 === selfName) return 'playerTwo';
+  }
+
+  // Fallback for events that only include playerName/opponentName fields.
+  const payloadPlayer = String(data.playerName || '').trim().toLowerCase();
+  const payloadOpponent = String(data.opponentName || '').trim().toLowerCase();
+  if (selfName && payloadPlayer === selfName) return 'playerOne';
+  if (selfName && payloadOpponent === selfName) return 'playerTwo';
+
+  return null;
+}
+
 // socket events
 socket.on('connect', () => {
   console.info('Connected to server');
@@ -370,6 +389,8 @@ socket.on('game created', ({ code }) => {
 socket.on('joined', (data) => {
   document.getElementById('lobby').classList.add('hidden');
   document.getElementById('tableCards').classList.remove('hidden');
+  const inferredKey = inferLocalPlayerKey(data);
+  if (inferredKey) localPlayerKeyForDebug = inferredKey;
   console.log(data)
   updateDebugInfo({
     gameCode: currentGameCode,
@@ -385,6 +406,8 @@ socket.on('joined', (data) => {
 
 socket.on('your turn', (data) => {
   currentGameCode = data.gameCode || currentGameCode;
+  const inferredKey = inferLocalPlayerKey(data);
+  if (inferredKey) localPlayerKeyForDebug = inferredKey;
   updateGameUI(data, true);
   const nextCollected = data.collected || lastCollectedState;
   lastCollectedState = nextCollected;
@@ -401,6 +424,8 @@ socket.on('your turn', (data) => {
 
 socket.on('wait', (data) => {
   currentGameCode = data.gameCode || currentGameCode;
+  const inferredKey = inferLocalPlayerKey(data);
+  if (inferredKey) localPlayerKeyForDebug = inferredKey;
   updateGameUI(data, false);
   const nextCollected = data.collected || lastCollectedState;
   lastCollectedState = nextCollected;
@@ -1417,6 +1442,7 @@ function playCard(action) {
 
 let lastDebugGameCode = null;
 let lastCollectedState = { playerOne: [], playerTwo: [] };
+let localPlayerKeyForDebug = 'playerOne';
 
 function formatDebugCard(card) {
   if (!card) return '—';
@@ -1444,18 +1470,27 @@ function updateDebugInfo({ gameCode, extra, score, opponentName, myCollectedCard
   const opponentLabel = opponentName || 'Opponent';
   const debugDiv = document.getElementById('debugInfo');
 
+  if (collected && typeof collected === 'object') {
+    lastCollectedState = {
+      playerOne: Array.isArray(collected.playerOne) ? [...collected.playerOne] : [],
+      playerTwo: Array.isArray(collected.playerTwo) ? [...collected.playerTwo] : []
+    };
+  }
+
   const liveCollected = collected && typeof collected === 'object' ? collected : lastCollectedState;
-  const leftCards = Array.isArray(myCollectedCards)
-    ? myCollectedCards
+  const myCollectedFromState = localPlayerKeyForDebug === 'playerTwo'
+    ? (Array.isArray(liveCollected.playerTwo) ? liveCollected.playerTwo : [])
     : (Array.isArray(liveCollected.playerOne) ? liveCollected.playerOne : []);
-  const rightCards = Array.isArray(opponentCollectedCards)
-    ? opponentCollectedCards
+  const opponentCollectedFromState = localPlayerKeyForDebug === 'playerTwo'
+    ? (Array.isArray(liveCollected.playerOne) ? liveCollected.playerOne : [])
     : (Array.isArray(liveCollected.playerTwo) ? liveCollected.playerTwo : []);
 
-  lastCollectedState = {
-    playerOne: [...leftCards],
-    playerTwo: [...rightCards]
-  };
+  const leftCards = Array.isArray(myCollectedCards)
+    ? myCollectedCards
+    : myCollectedFromState;
+  const rightCards = Array.isArray(opponentCollectedCards)
+    ? opponentCollectedCards
+    : opponentCollectedFromState;
 
   debugDiv.innerHTML = `
     <b>Game Code:</b> ${lastDebugGameCode || '—'}<br>
