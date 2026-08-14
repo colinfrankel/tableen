@@ -432,9 +432,8 @@ io.on('connection', (socket) => {
       actionPayload.toStackNumber = toInfo.stackNumber;
     }
 
-    // Track last grabber for end-of-round collection
+    // Track last grabber only after a valid action succeeds.
     if (payload.type === 'grab') {
-      game.lastGrabber = playerKey;
       game.turnLastActionStackId = payload.stackId || null;
     }
 
@@ -464,6 +463,7 @@ io.on('connection', (socket) => {
       games[gameCode] = newState;
 
       if (payload.type === 'grab') {
+        game.lastGrabber = playerKey;
         game.turnStartTableCards = [];
         game.turnBoardstackHistory = [];
         game.turnLastActionStackId = null;

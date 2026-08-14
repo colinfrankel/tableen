@@ -386,11 +386,13 @@ socket.on('joined', (data) => {
 socket.on('your turn', (data) => {
   currentGameCode = data.gameCode || currentGameCode;
   updateGameUI(data, true);
+  const nextCollected = data.collected || lastCollectedState;
+  lastCollectedState = nextCollected;
   updateDebugInfo({
     gameCode: currentGameCode,
     score: data.score || lastScore,
     opponentName: resolveOpponentName(data),
-    collected: data.collected || { playerOne: [], playerTwo: [] },
+    collected: nextCollected,
     extra: `
       <b>Deck Size:</b> ${data.deck ? data.deck.length : '—'}<br>
     `
@@ -400,11 +402,13 @@ socket.on('your turn', (data) => {
 socket.on('wait', (data) => {
   currentGameCode = data.gameCode || currentGameCode;
   updateGameUI(data, false);
+  const nextCollected = data.collected || lastCollectedState;
+  lastCollectedState = nextCollected;
   updateDebugInfo({
     gameCode: currentGameCode,
     score: data.score || lastScore,
     opponentName: resolveOpponentName(data),
-    collected: data.collected || { playerOne: [], playerTwo: [] },
+    collected: nextCollected,
     extra: `
       <b>Deck Size:</b> ${data.deck ? data.deck.length : '—'}<br>
     `
@@ -418,7 +422,7 @@ socket.on('update table', (table, hand) => {
   updateDebugInfo({
     gameCode: currentGameCode,
     score: lastScore,
-    collected: { playerOne: [], playerTwo: [] }
+    collected: lastCollectedState
   });
 });
 
@@ -1412,6 +1416,7 @@ function playCard(action) {
 }
 
 let lastDebugGameCode = null;
+let lastCollectedState = { playerOne: [], playerTwo: [] };
 
 function formatDebugCard(card) {
   if (!card) return '—';
@@ -1439,12 +1444,18 @@ function updateDebugInfo({ gameCode, extra, score, opponentName, myCollectedCard
   const opponentLabel = opponentName || 'Opponent';
   const debugDiv = document.getElementById('debugInfo');
 
+  const liveCollected = collected && typeof collected === 'object' ? collected : lastCollectedState;
   const leftCards = Array.isArray(myCollectedCards)
     ? myCollectedCards
-    : (collected && Array.isArray(collected.playerOne) ? collected.playerOne : []);
+    : (Array.isArray(liveCollected.playerOne) ? liveCollected.playerOne : []);
   const rightCards = Array.isArray(opponentCollectedCards)
     ? opponentCollectedCards
-    : (collected && Array.isArray(collected.playerTwo) ? collected.playerTwo : []);
+    : (Array.isArray(liveCollected.playerTwo) ? liveCollected.playerTwo : []);
+
+  lastCollectedState = {
+    playerOne: [...leftCards],
+    playerTwo: [...rightCards]
+  };
 
   debugDiv.innerHTML = `
     <b>Game Code:</b> ${lastDebugGameCode || '—'}<br>
