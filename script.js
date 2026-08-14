@@ -1,6 +1,55 @@
-document.addEventListener('DOMContentLoaded', () => {
+const CARD_SUITS = ['clubs', 'diamonds', 'hearts', 'spades'];
+const CARD_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+const CARD_ASSET_CACHE = new Map();
+
+function getCardImageUrl(card, { useAceAsOne = false } = {}) {
+  const value = card && card.card === 14 && useAceAsOne ? 1 : (card ? card.card : 1);
+  const suit = card ? card.suit : 'clubs';
+  return `./cards/${suit}/${value}.svg`;
+}
+
+function preloadCardAsset(url) {
+  if (CARD_ASSET_CACHE.has(url)) return Promise.resolve(url);
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => {
+      CARD_ASSET_CACHE.set(url, img);
+      resolve(url);
+    };
+    img.onerror = () => {
+      resolve(url);
+    };
+    img.src = url;
+  });
+}
+
+async function preloadDeckAssets({ showSpinner = true } = {}) {
+  const urls = [
+    './cards/cardback.svg',
+    ...CARD_SUITS.flatMap((suit) => CARD_VALUES.map((value) => `./cards/${suit}/${value}.svg`))
+  ];
+
+  if (showSpinner) setLoading(true, 'Loading card deck…');
+
+  try {
+    await Promise.all(urls.map(preloadCardAsset));
+  } finally {
+    if (showSpinner) setLoading(false);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
   const joinCodeInput = document.getElementById('joinCode');
   if (joinCodeInput) joinCodeInput.value = '';
+
+  try {
+    await preloadDeckAssets({ showSpinner: true });
+  } catch (e) {
+    console.warn('Card deck preload failed:', e);
+  }
+
   bootstrapUserFlow();
   console.log('Tableen script loaded');
 });
@@ -827,7 +876,7 @@ function updateGameUI(data, isYourTurn) {
     const card = cardArray[0];
     const displayCardValue = card.card === 14 ? 1 : card.card;
     const cardElement = document.createElement('img');
-    cardElement.src = `./cards/${card.suit}/${displayCardValue}.svg`;
+    cardElement.src = getCardImageUrl({ ...card, card: displayCardValue }, { useAceAsOne: true });
     cardElement.classList.add('card');
     cardElement.setAttribute('draggable', true);
 
@@ -883,7 +932,7 @@ function updateTableCards(tableCards, playerHand = []) {
     // Render each card in the stack
     stackObj.cards.forEach((card, idx) => {
       const cardElement = document.createElement('img');
-      cardElement.src = `./cards/${card.suit}/${card.card}.svg`;
+      cardElement.src = getCardImageUrl(card);
       cardElement.classList.add('card');
       cardElement.style.setProperty('--stack-index', idx);
       cardElement.setAttribute('draggable', true);
