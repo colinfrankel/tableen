@@ -1,9 +1,45 @@
 const assert = require('assert');
-const { validateAndApplyAction, generateStackId } = require('../gameLogic');
+const { validateAndApplyAction, generateStackId, calculatePoints } = require('../gameLogic');
 
 function makeCard(card, suit) { return { card, suit }; }
 
 function cloneState(state) { return JSON.parse(JSON.stringify(state)); }
+
+describe('gameLogic.calculatePoints', () => {
+  it('awards the correct score bonuses for most cards, aces, 2 of spades, 10 of diamonds, and most spades', () => {
+    const collectedA = [
+      { card: 14, suit: 'spades' },
+      { card: 2, suit: 'spades' },
+      { card: 10, suit: 'diamonds' },
+      { card: 5, suit: 'clubs' },
+      { card: 7, suit: 'hearts' }
+    ];
+    const collectedB = [
+      { card: 9, suit: 'clubs' },
+      { card: 3, suit: 'diamonds' }
+    ];
+
+    const result = calculatePoints(collectedA, collectedB);
+
+    assert.deepStrictEqual(result, { pointsA: 8, pointsB: 0 });
+  });
+
+  it('awards no bonus for most spades when tied', () => {
+    const collectedA = [
+      { card: 5, suit: 'spades' },
+      { card: 8, suit: 'spades' }
+    ];
+    const collectedB = [
+      { card: 9, suit: 'spades' },
+      { card: 4, suit: 'spades' }
+    ];
+
+    const result = calculatePoints(collectedA, collectedB);
+
+    assert.strictEqual(result.pointsA, 0);
+    assert.strictEqual(result.pointsB, 0);
+  });
+});
 
 describe('gameLogic.validateAndApplyAction', () => {
   it('plays normal ace (14) as 1 on board', () => {

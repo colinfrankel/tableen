@@ -358,7 +358,12 @@ socket.on('game created', ({ code }) => {
   showGameCode(code);
   lobbyStatus.innerText = `Waiting for other player...`;
   document.getElementById('gameStartOptions').classList.add('hidden');
-  updateDebugInfo({ gameCode: currentGameCode, score: { myScore: 0, opponentScore: 0 }, opponentName: 'Opponent' });
+  updateDebugInfo({
+    gameCode: currentGameCode,
+    score: { myScore: 0, opponentScore: 0 },
+    opponentName: 'Opponent',
+    collected: { playerOne: [], playerTwo: [] }
+  });
 
 });
 
@@ -370,8 +375,9 @@ socket.on('joined', (data) => {
     gameCode: currentGameCode,
     score: data.score || lastScore,
     opponentName: resolveOpponentName(data),
+    collected: data.collected || { playerOne: [], playerTwo: [] },
     extra: `
-      <b>Deck Size:</b> 40<br>
+      <b>Deck Size:</b> ${data.deck ? data.deck.length : '—'}<br>
     `
   });
 
@@ -384,6 +390,7 @@ socket.on('your turn', (data) => {
     gameCode: currentGameCode,
     score: data.score || lastScore,
     opponentName: resolveOpponentName(data),
+    collected: data.collected || { playerOne: [], playerTwo: [] },
     extra: `
       <b>Deck Size:</b> ${data.deck ? data.deck.length : '—'}<br>
     `
@@ -397,6 +404,7 @@ socket.on('wait', (data) => {
     gameCode: currentGameCode,
     score: data.score || lastScore,
     opponentName: resolveOpponentName(data),
+    collected: data.collected || { playerOne: [], playerTwo: [] },
     extra: `
       <b>Deck Size:</b> ${data.deck ? data.deck.length : '—'}<br>
     `
@@ -407,7 +415,11 @@ socket.on('wait', (data) => {
 
 socket.on('update table', (table, hand) => {
   updateTableCards(table, hand);
-  updateDebugInfo({ gameCode: currentGameCode, score: lastScore });
+  updateDebugInfo({
+    gameCode: currentGameCode,
+    score: lastScore,
+    collected: { playerOne: [], playerTwo: [] }
+  });
 });
 
 socket.on('status', (msg) => {
@@ -568,6 +580,8 @@ socket.on('round over', (data) => {
   updateDebugInfo({
     gameCode: currentGameCode,
     score: data.score,
+    myCollectedCards: data.myCards || [],
+    opponentCollectedCards: data.opponentCards || [],
     extra: `
       <b>Deck Size:</b> 40<br>
     `
@@ -1398,15 +1412,44 @@ function playCard(action) {
 
 let lastDebugGameCode = null;
 
+function formatDebugCard(card) {
+  if (!card) return '—';
+  const valueMap = { 1: 'A', 11: 'J', 12: 'Q', 13: 'K' };
+  const value = valueMap[card.card] || card.card;
+  const suitMap = {
+    hearts: '♥',
+    diamonds: '♦',
+    clubs: '♣',
+    spades: '♠'
+  };
+  const suit = suitMap[card.suit] || card.suit || '';
+  return `${value}${suit}`;
+}
+
+function summarizeCollectedCards(cards = []) {
+  if (!Array.isArray(cards) || cards.length === 0) return 'none';
+  return cards.map(formatDebugCard).join(', ');
+}
+
 let lastScore = { myScore: 0, opponentScore: 0 };
-function updateDebugInfo({ gameCode, extra, score, opponentName }) {
+function updateDebugInfo({ gameCode, extra, score, opponentName, myCollectedCards, opponentCollectedCards, collected }) {
   if (gameCode) lastDebugGameCode = gameCode;
   if (score) lastScore = score;
   const opponentLabel = opponentName || 'Opponent';
   const debugDiv = document.getElementById('debugInfo');
+
+  const leftCards = Array.isArray(myCollectedCards)
+    ? myCollectedCards
+    : (collected && Array.isArray(collected.playerOne) ? collected.playerOne : []);
+  const rightCards = Array.isArray(opponentCollectedCards)
+    ? opponentCollectedCards
+    : (collected && Array.isArray(collected.playerTwo) ? collected.playerTwo : []);
+
   debugDiv.innerHTML = `
     <b>Game Code:</b> ${lastDebugGameCode || '—'}<br>
     <b>Score:</b> You ${lastScore.myScore} - ${opponentLabel} ${lastScore.opponentScore}<br>
+    <b>Your collected:</b> ${summarizeCollectedCards(leftCards)}<br>
+    <b>${opponentLabel} collected:</b> ${summarizeCollectedCards(rightCards)}<br>
     ${extra ? `<div>${extra}</div>` : ''}
   `;
 }
