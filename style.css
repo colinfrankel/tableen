@@ -1,7 +1,14 @@
 /* Root color variables */
 :root {
   --accent: #0a84ff;
-  --radius: 12px;
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --radius: var(--radius-md);
+  --shadow-soft: 0 6px 18px rgba(0, 0, 0, 0.22);
+  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.24);
   --color-bg: #0e0f12; /* neutral charcoal */
   --color-bg-light: #16171a; /* slightly lighter neutral */
   --color-border: #e8e8ea; /* off-white neutral */
@@ -52,7 +59,7 @@ header {
   border: 1px solid var(--color-stack-border);
   color: var(--color-border);
   padding: 6px 10px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 #openSettings:hover {
@@ -67,7 +74,7 @@ header {
   padding: 6px 12px;
   border: 1px solid var(--color-stack-border);
   background: var(--color-bg-light);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 #userBadge #userName {
   font-weight: 700;
@@ -95,12 +102,12 @@ header {
 .pill-btn, #createBtn, #joinBtn, .modal-buttons button {
   padding: 0.5em 1.5em;
   font-size: 1em;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   border: none;
   background: var(--color-btn-bg);
   color: var(--color-btn-text);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, transform 0.12s ease;
 }
 
 #createBtn:hover, #joinBtn:hover, .modal-buttons button:hover {
@@ -110,7 +117,7 @@ header {
 #joinCode {
   padding: 0.5em;
   font-size: 1em;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-stack-border);
   width: 200px;
   background-color: transparent;
@@ -127,7 +134,7 @@ header {
   height: 48px;
   text-align: center;
   font-size: 1.2em;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-stack-border);
   background: var(--color-bg-light);
   color: var(--color-border);
@@ -141,7 +148,7 @@ header {
 
 #createContainer, #joinContainer {
   border: 1px solid var(--color-stack-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 1em;
   background: var(--color-bg-light);
   width: 300px;
@@ -203,8 +210,8 @@ header {
   margin: 5px;
   cursor: grab;
   border: 1px solid var(--color-card-border);
-  border-radius: calc(var(--radius) - 2px);
-  box-shadow: 0px 4px 6px var(--color-card-shadow);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
 }
 
 .card.dragging {
@@ -228,10 +235,11 @@ header {
 #tableCards {
   background-color: var(--color-stack-bg);
   border: 2px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   padding: 40px 40px 20px 40px;
   min-width: 400px;
   min-height: 160px;
+  box-shadow: var(--shadow-soft);
 }
 
 .stack {
@@ -248,9 +256,9 @@ header {
   left: 50%;
   transform: translate(-50%, calc(5px * var(--stack-index))) rotate(calc(15deg * var(--stack-index)));
   z-index: calc(var(--stack-index));
-  box-shadow: 0px 4px 6px var(--color-card-shadow);
+  box-shadow: var(--shadow-card);
   border: 1px solid var(--color-card-border);
-  border-radius: calc(var(--radius) - 2px);
+  border-radius: var(--radius-sm);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
@@ -281,7 +289,7 @@ header {
   color: var(--color-modal-text);
   border: 1px solid var(--color-stack-border);
   padding: 10px 12px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   box-shadow: 0 4px 16px var(--color-modal-shadow);
 }
 .toast.success { border-color: #28a745; }
@@ -296,7 +304,7 @@ header {
   color: var(--color-modal-text);
   border: 1px solid var(--color-stack-border);
   padding: 8px 12px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   box-shadow: 0 4px 16px var(--color-modal-shadow);
   z-index: 3000;
 }
@@ -314,7 +322,7 @@ header {
 .modal {
   background: var(--color-modal-bg);
   color: var(--color-modal-text);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   padding: 1em 1.2em;
   box-shadow: 0 8px 32px var(--color-modal-shadow);
   min-width: 260px;
@@ -372,7 +380,7 @@ header {
 }
 .welcome-row input[type="text"] {
   padding: 10px 12px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-stack-border);
   background: var(--color-bg-light);
   color: var(--color-border);
@@ -396,7 +404,7 @@ header {
   color: var(--color-debug-text);
   font-size: 0.95em;
   padding: 10px 16px;
-  border-top-right-radius: 10px;
+  border-top-right-radius: var(--radius-lg);
   z-index: 9999;
   min-width: 220px;
   max-width: 350px;
@@ -424,7 +432,7 @@ header {
   color: var(--color-btn-text);
   padding: 5px 10px;
   border: 2px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   text-decoration: none;
   background-color: var(--color-btn-bg);
 }
