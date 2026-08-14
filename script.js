@@ -165,13 +165,23 @@ function showGameCode(code) {
 
 async function syncLeaderboardProfile(profile) {
   if (!profile || !window.TableenLB || typeof window.TableenLB.pushStats !== 'function') return;
-  await window.TableenLB.pushStats({
-    name: profile.name || 'Player',
-    wins: profile.wins || 0,
-    games: profile.games || 0
-  });
-  if (typeof window.TableenLB.loadLeaderboard === 'function') {
-    window.TableenLB.loadLeaderboard();
+  try {
+    await window.TableenLB.pushStats({
+      name: profile.name || 'Player',
+      wins: profile.wins || 0,
+      games: profile.games || 0
+    });
+  } catch (e) {
+    // Non-fatal: leaderboard update can fail due to Firestore rules or network
+    // (eg. adblockers blocking firestore.googleapis.com). Don't block sign-in.
+    console.warn('Leaderboard push failed (ignored):', e && e.message ? e.message : e);
+  }
+  try {
+    if (typeof window.TableenLB.loadLeaderboard === 'function') {
+      window.TableenLB.loadLeaderboard();
+    }
+  } catch (e) {
+    console.warn('Leaderboard load failed (ignored):', e && e.message ? e.message : e);
   }
 }
 
