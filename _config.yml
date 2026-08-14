@@ -1,0 +1,13 @@
+# Prevent Jekyll from processing runtime/dependency folders
+exclude:
+  - backend
+  - backend/**
+  - node_modules
+  - backend/node_modules
+  - .jekyllignore
+  - .git
+  - README.md
+
+# Optional: keep future Liquid processing safe by not rendering lockfiles
+  - package-lock.json
+  - yarn.lock
