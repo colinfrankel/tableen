@@ -891,7 +891,7 @@ document.body.addEventListener('drop', (e) => {
   }
 });
 
-function beginTouchDragFromHand(cardElement, card) {
+function beginTouchDragFromHand(cardElement, card, point = null) {
   draggedCardEl = cardElement;
   draggedCardEl.classList.add('dragging');
   draggedCard = { card: card.card, suit: card.suit, source: 'hand' };
@@ -900,11 +900,13 @@ function beginTouchDragFromHand(cardElement, card) {
   socket.emit('drag card', {
     gameCode: currentGameCode,
     card: draggedCard,
-    origin: 'opponentTop'
+    origin: 'hand',
+    x: point && typeof point.clientX === 'number' ? point.clientX : null,
+    y: point && typeof point.clientY === 'number' ? point.clientY : null
   });
 }
 
-function beginTouchDragFromTable(cardElement, card, stackIndex, stackId) {
+function beginTouchDragFromTable(cardElement, card, stackIndex, stackId, point = null) {
   draggedTableCardEl = cardElement;
   draggedTableCardEl.classList.add('dragging');
   draggedTableCard = { card: card.card, suit: card.suit, source: 'table', stackIndex, stackId };
@@ -914,7 +916,9 @@ function beginTouchDragFromTable(cardElement, card, stackIndex, stackId) {
     gameCode: currentGameCode,
     card: draggedTableCard,
     origin: 'table',
-    stackId
+    stackId,
+    x: point && typeof point.clientX === 'number' ? point.clientX : null,
+    y: point && typeof point.clientY === 'number' ? point.clientY : null
   });
 }
 
@@ -1042,7 +1046,7 @@ function updateGameUI(data, isYourTurn) {
     cardElement.addEventListener('touchstart', function (e) {
       if (!e.touches || e.touches.length === 0) return;
       e.preventDefault();
-      beginTouchDragFromHand(cardElement, { card: displayCardValue, suit: card.suit });
+      beginTouchDragFromHand(cardElement, { card: displayCardValue, suit: card.suit }, e.touches[0]);
     }, { passive: false });
 
     document.getElementById('cards').appendChild(cardElement);
@@ -1107,7 +1111,7 @@ function updateTableCards(tableCards, playerHand = []) {
       cardElement.addEventListener('touchstart', (e) => {
         if (!e.touches || e.touches.length === 0) return;
         e.preventDefault();
-        beginTouchDragFromTable(cardElement, { card: card.card, suit: card.suit }, stackIndex, stackObj.id);
+        beginTouchDragFromTable(cardElement, { card: card.card, suit: card.suit }, stackIndex, stackObj.id, e.touches[0]);
       }, { passive: false });
 
       stackDiv.appendChild(cardElement);
