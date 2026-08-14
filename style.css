@@ -185,6 +185,19 @@ header {
   box-shadow: 0px 4px 6px var(--color-card-shadow);
 }
 
+.card.dragging {
+  filter: grayscale(70%) brightness(0.9);
+  opacity: 0.7;
+  transform: scale(0.98);
+}
+
+/* opponent ghost styling */
+#opponentDrag {
+  transition: transform 0.06s linear, left 0.06s linear, top 0.06s linear;
+  filter: grayscale(70%) brightness(0.9);
+  opacity: 0.9;
+}
+
 #opponentCards {
   display: none;
   height: 125px;

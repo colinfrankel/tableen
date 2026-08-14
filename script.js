@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Modal logic
-function showStackChoiceModal(message, onChoice, btn1Label = "Stack", btn2Label = "Sum") {
+function showStackChoiceModal(message, onChoice, btn1Label = 'Grab', btn2Label = 'Stack as sum', btn1Value = null, btn2Value = null) {
   const overlay = document.getElementById('modalOverlay');
   if (!overlay) return;
   const msg = overlay.querySelector('#modalMessage');
@@ -16,13 +16,25 @@ function showStackChoiceModal(message, onChoice, btn1Label = "Stack", btn2Label 
   btns.innerHTML = `<button id="modalOption1">${btn1Label}</button><button id="modalOption2">${btn2Label}</button>`;
   const btn1 = overlay.querySelector('#modalOption1');
   const btn2 = overlay.querySelector('#modalOption2');
+
+  function inferValue(label) {
+    const l = (label || '').toLowerCase();
+    if (l.includes('grab')) return 'grab';
+    if (l.includes('sum')) return 'sum';
+    if (l.includes('stack')) return 'stack';
+    return l.replace(/\s+/g, '_') || 'choice';
+  }
+
+  const val1 = btn1Value || inferValue(btn1Label);
+  const val2 = btn2Value || inferValue(btn2Label);
+
   function cleanup() {
     overlay.classList.add('hidden');
     btn1.removeEventListener('click', asOne);
     btn2.removeEventListener('click', asTwo);
   }
-  function asOne() { cleanup(); onChoice(btn1Label.toLowerCase()); }
-  function asTwo() { cleanup(); onChoice(btn2Label.toLowerCase()); }
+  function asOne() { cleanup(); onChoice(val1); }
+  function asTwo() { cleanup(); onChoice(val2); }
   btn1.addEventListener('click', asOne);
   btn2.addEventListener('click', asTwo);
 }
@@ -119,6 +131,109 @@ function resolveOpponentName(data = {}) {
 // socket events
 socket.on('connect', () => {
   console.info('Connected to server');
+});
+
+// --- Opponent drag visualization ---
+let _opponentDragEl = null;
+let _opponentDraggedStackEl = null;
+function _ensureOpponentDragEl() {
+  if (_opponentDragEl) return _opponentDragEl;
+  const el = document.createElement('img');
+  el.id = 'opponentDrag';
+  el.className = 'card';
+  el.style.position = 'fixed';
+  el.style.pointerEvents = 'none';
+  el.style.zIndex = 4000;
+  el.style.width = '80px';
+  el.style.display = 'none';
+  document.body.appendChild(el);
+  _opponentDragEl = el;
+  return el;
+}
+
+function _showOpponentDrag(card, x = window.innerWidth/2, y = window.innerHeight/2, flip = false) {
+  const el = _ensureOpponentDragEl();
+  const displayValue = (card.card === 14 ? 1 : card.card);
+  el.src = `./cards/${card.suit}/${displayValue}.svg`;
+  el.style.left = (x - 40) + 'px';
+  el.style.top = (y - 40) + 'px';
+  el.style.display = 'block';
+  el.style.transform = flip ? 'scaleX(-1)' : 'none';
+}
+
+function _moveOpponentDrag(x, y) {
+  const el = _opponentDragEl;
+  if (!el) return;
+  el.style.left = (x - 40) + 'px';
+  el.style.top = (y - 40) + 'px';
+}
+
+function _hideOpponentDrag() {
+  if (!_opponentDragEl) return;
+  _opponentDragEl.style.display = 'none';
+  _opponentDragEl.style.transform = 'none';
+}
+
+socket.on('opponent drag start', (payload) => {
+  try {
+    if (!payload || !payload.card) return;
+
+    // If the drag originated from a specific table stack, position at that stack and highlight
+    if (payload.origin === 'table' && payload.stackId) {
+      const stackEl = document.querySelector(`[data-stack-id="${payload.stackId}"]`);
+      if (stackEl) {
+        const r = stackEl.getBoundingClientRect();
+        const img = stackEl.querySelector('img');
+        if (img) {
+          img.classList.add('dragging');
+          _opponentDraggedStackEl = img;
+        }
+        _showOpponentDrag(payload.card, r.left + r.width / 2, r.top + r.height / 2);
+        return;
+      }
+    }
+
+    // Default: use emitted pointer coordinates. For hand-origin drags, mirror Y so
+    // distance-from-bottom becomes distance-from-top on the opponent view.
+    const clientX = (typeof payload.x === 'number') ? payload.x : (window.innerWidth / 2);
+    const clientY = (typeof payload.y === 'number') ? payload.y : (window.innerHeight / 2);
+    let outX = clientX;
+    let outY = clientY;
+    if (payload.origin === 'hand') {
+      outY = window.innerHeight - clientY;
+    }
+
+    // Clamp to viewport bounds
+    outX = Math.max(8, Math.min(window.innerWidth - 8, outX));
+    outY = Math.max(8, Math.min(window.innerHeight - 8, outY));
+
+    _showOpponentDrag(payload.card, outX, outY, payload.flip);
+  } catch (e) { console.warn('opponent drag start error', e); }
+});
+
+socket.on('opponent drag move', (payload) => {
+  try {
+    if (!payload) return;
+    const clientX = (typeof payload.x === 'number') ? payload.x : (window.innerWidth / 2);
+    const clientY = (typeof payload.y === 'number') ? payload.y : (window.innerHeight / 2);
+    let outX = clientX;
+    let outY = clientY;
+    if (payload.origin === 'hand') {
+      outY = window.innerHeight - clientY;
+    }
+    outX = Math.max(8, Math.min(window.innerWidth - 8, outX));
+    outY = Math.max(8, Math.min(window.innerHeight - 8, outY));
+    _moveOpponentDrag(outX, outY);
+  } catch (e) { console.warn('opponent drag move error', e); }
+});
+
+socket.on('opponent drag end', () => {
+  // remove any stack highlight
+  if (_opponentDraggedStackEl) {
+    _opponentDraggedStackEl.classList.remove('dragging');
+    _opponentDraggedStackEl = null;
+  }
+  _hideOpponentDrag();
 });
 
 socket.on('game created', ({ code }) => {
@@ -224,7 +339,7 @@ socket.on('opponent action', (data) => {
       else if (data.stackNumber === 13) resultLabel = 'K';
       else if (data.stackNumber === 14) resultLabel = 'A';
       else resultLabel = data.stackNumber;
-      actionText = `Stacked ${miniCardText(data.playedCard)} on ${miniCardText(data.stackCards[0])} to make ${resultLabel}`;
+            _showOpponentDrag(payload.card, r.left + r.width / 2, r.top + r.height / 2);
     }
     // If stacking two identical cards (classic stack, not sum)
     else if (
@@ -557,6 +672,8 @@ async function incrementStats(winInc, gameInc) {
 }
 
 let CURRENT_USER = null;
+let draggedCardEl = null;
+let draggedTableCardEl = null;
 
 
 // drag/drop base handlers
@@ -575,6 +692,18 @@ document.body.addEventListener('drop', (e) => {
     });
     draggedCard = null;
   }
+});
+
+// Throttle drag-move emits to avoid flooding server
+let _lastDragEmit = 0;
+document.addEventListener('drag', (e) => {
+  const now = Date.now();
+  if (now - _lastDragEmit < 40) return; // ~25fps
+  _lastDragEmit = now;
+  if (!socket || !currentGameCode) return;
+  // determine which card is being dragged
+  const card = draggedTableCard || draggedCard || null;
+  socket.emit('drag move', { gameCode: currentGameCode, x: e.clientX, y: e.clientY, card });
 });
 
 // Update UI with player's hand + table
@@ -600,14 +729,22 @@ function updateGameUI(data, isYourTurn) {
     cardElement.setAttribute('draggable', true);
 
     cardElement.addEventListener('dragstart', function (e) {
-      draggedCard = { card: displayCardValue, suit: card.suit, stackSum: card.stackSum };
+      draggedCardEl = cardElement;
+      cardElement.classList.add('dragging');
+      draggedCard = { card: displayCardValue, suit: card.suit, source: 'hand' };
+      // Tell opponent to render this drag starting from their opponent area (top)
       socket.emit('drag card', {
         gameCode: currentGameCode,
-        card: draggedCard
+        card: draggedCard,
+        origin: 'opponentTop'
       });
     });
 
     cardElement.addEventListener('dragend', function (e) {
+      if (draggedCardEl) {
+        draggedCardEl.classList.remove('dragging');
+        draggedCardEl = null;
+      }
       socket.emit('drag end', {
         gameCode: currentGameCode
       });
@@ -648,14 +785,23 @@ function updateTableCards(tableCards, playerHand = []) {
       cardElement.style.setProperty('--stack-index', idx);
       cardElement.setAttribute('draggable', true);
       cardElement.addEventListener('dragstart', (e) => {
-        draggedTableCard = { card: card.card, suit: card.suit, stackIndex, stackId: stackObj.id };
+        draggedTableCardEl = cardElement;
+        cardElement.classList.add('dragging');
+        draggedTableCard = { card: card.card, suit: card.suit, source: 'table', stackIndex, stackId: stackObj.id };
+        // emit the actual dragged table card info (include stackId so opponent can highlight)
         socket.emit('drag card', {
           gameCode: currentGameCode,
-          card: draggedCard
+          card: draggedTableCard,
+          origin: 'table',
+          stackId: stackObj.id
         });
       });
 
       cardElement.addEventListener('dragend', function (e) {
+        if (draggedTableCardEl) {
+          draggedTableCardEl.classList.remove('dragging');
+          draggedTableCardEl = null;
+        }
         socket.emit('drag end', {
           gameCode: currentGameCode
         });
@@ -681,6 +827,14 @@ function updateTableCards(tableCards, playerHand = []) {
         cardTarget = { card: cardVal, suit };
       } else {
         cardTarget = stackObj.cards[0] ? { card: stackObj.cards[0].card, suit: stackObj.cards[0].suit } : null;
+      }
+    });
+
+    // Send drag position updates while dragging over this stack
+    stackDiv.addEventListener('drag', (e) => {
+      if (!e.clientX) return;
+      if (socket && currentGameCode) {
+        socket.emit('drag move', { gameCode: currentGameCode, x: e.clientX, y: e.clientY });
       }
     });
 
@@ -738,21 +892,31 @@ function updateTableCards(tableCards, playerHand = []) {
             if (numInHand === 1) {
               if (hasSumCard) {
                 showStackChoiceModal('Grab this pile or stack as sum?', (choice) => {
-                  let playedCardValue = draggedCard.card;
-                  if (choice === 'stack' && draggedCard.card === 14) {
-                    playedCardValue = 1;
+                  if (choice === 'grab') {
+                    playCard({
+                      type: "grab",
+                      gameCode: currentGameCode,
+                      playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                      stackId: stackObj.id,
+                      playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
+                    });
+                  } else {
+                    let playedCardValue = draggedCard.card;
+                    if (choice === 'stack' && draggedCard.card === 14) {
+                      playedCardValue = 1;
+                    }
+                    playCard({
+                      type: "stack",
+                      gameCode: currentGameCode,
+                      playedCard: { card: playedCardValue, suit: draggedCard.suit },
+                      stackId: stackObj.id,
+                      stackAsSum: choice === 'sum',
+                      stackSum,
+                      playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
+                    });
                   }
-                  playCard({
-                    type: "stack",
-                    gameCode: currentGameCode,
-                    playedCard: { card: playedCardValue, suit: draggedCard.suit },
-                    stackId: stackObj.id,
-                    stackAsSum: choice === 'sum',
-                    stackSum,
-                    playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
-                  });
                   draggedCard = null;
-                });
+                }, 'Grab pile', 'Stack as sum', 'grab', 'sum');
                 return;
               } else {
                 playCard({
@@ -767,21 +931,31 @@ function updateTableCards(tableCards, playerHand = []) {
               }
             } else if (numInHand > 1) {
               showStackChoiceModal('Grab this pile or continue stacking?', (choice) => {
-                let playedCardValue = draggedCard.card;
-                if (choice === 'stack' && draggedCard.card === 14) {
-                  playedCardValue = 1;
+                if (choice === 'grab') {
+                  playCard({
+                    type: "grab",
+                    gameCode: currentGameCode,
+                    playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                    stackId: stackObj.id,
+                    playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
+                  });
+                } else {
+                  let playedCardValue = draggedCard.card;
+                  if (choice === 'stack' && draggedCard.card === 14) {
+                    playedCardValue = 1;
+                  }
+                  playCard({
+                    type: "stack",
+                    gameCode: currentGameCode,
+                    playedCard: { card: playedCardValue, suit: draggedCard.suit },
+                    stackId: stackObj.id,
+                    stackAsSum: false,
+                    stackSum,
+                    playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
+                  });
                 }
-                playCard({
-                  type: "stack",
-                  gameCode: currentGameCode,
-                  playedCard: { card: playedCardValue, suit: draggedCard.suit },
-                  stackId: stackObj.id,
-                  stackAsSum: choice === 'sum',
-                  stackSum,
-                  playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
-                });
                 draggedCard = null;
-              }, "Stack", "Grab");
+              }, 'Grab pile', 'Continue stacking', 'grab', 'stack');
               return;
             } else {
               playCard({
@@ -797,21 +971,31 @@ function updateTableCards(tableCards, playerHand = []) {
           } else {
             if (numInHand > 1) {
               showStackChoiceModal('Grab this pile or continue stacking?', (choice) => {
-                let playedCardValue = draggedCard.card;
-                if (choice === 'stack' && draggedCard.card === 14) {
-                  playedCardValue = 1;
+                if (choice === 'grab') {
+                  playCard({
+                    type: "grab",
+                    gameCode: currentGameCode,
+                    playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                    stackId: stackObj.id,
+                    playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
+                  });
+                } else {
+                  let playedCardValue = draggedCard.card;
+                  if (choice === 'stack' && draggedCard.card === 14) {
+                    playedCardValue = 1;
+                  }
+                  playCard({
+                    type: "stack",
+                    gameCode: currentGameCode,
+                    playedCard: { card: playedCardValue, suit: draggedCard.suit },
+                    stackId: stackObj.id,
+                    stackAsSum: false,
+                    stackSum,
+                    playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
+                  });
                 }
-                playCard({
-                  type: "stack",
-                  gameCode: currentGameCode,
-                  playedCard: { card: playedCardValue, suit: draggedCard.suit },
-                  stackId: stackObj.id,
-                  stackAsSum: choice === 'sum',
-                  stackSum,
-                  playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
-                });
                 draggedCard = null;
-              }, "Stack", "Grab");
+              }, 'Grab pile', 'Continue stacking', 'grab', 'stack');
               return;
             } else {
               playCard({
@@ -839,7 +1023,15 @@ function updateTableCards(tableCards, playerHand = []) {
           ).length;
           if (numStackSumInHand > 1) {
             showStackChoiceModal(`Continue to stack <code>${stackSum}s</code> or just grab it?`, (choice) => {
-              if (choice === 'stack') {
+              if (choice === 'grab') {
+                playCard({
+                  type: "grab",
+                  gameCode: currentGameCode,
+                  playedCard: { card: draggedCard.card, suit: draggedCard.suit },
+                  stackId: stackObj.id,
+                  playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
+                });
+              } else {
                 let playedCardValue = draggedCard.card;
                 if (draggedCard.card === 14) {
                   playedCardValue = 1;
@@ -851,18 +1043,9 @@ function updateTableCards(tableCards, playerHand = []) {
                   stackId: stackObj.id,
                   playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
                 });
-                draggedCard = null;
-              } else {
-                playCard({
-                  type: "grab",
-                  gameCode: currentGameCode,
-                  playedCard: { card: draggedCard.card, suit: draggedCard.suit },
-                  stackId: stackObj.id,
-                  playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
-                });
-                draggedCard = null;
               }
-            }, "Stack", "Grab");
+              draggedCard = null;
+            }, 'Grab pile', 'Continue stacking', 'grab', 'stack');
             return;
           }
           playCard({
@@ -976,7 +1159,7 @@ function updateTableCards(tableCards, playerHand = []) {
                 playerName: CURRENT_USER ? CURRENT_USER.name : 'Player'
               });
               draggedTableCard = null;
-            }, "Stack", "Sum");
+            }, 'Keep as stack', 'Combine as sum', 'stack', 'sum');
             return;
           } else if (hasSumCard) {
             playCard({

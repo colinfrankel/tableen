@@ -125,6 +125,8 @@ function restoreTableAfterTurn(game, finalTargetId = null) {
       return;
     }
 
+    // (drag handlers moved to connection scope)
+
     const fromStack = rebuiltTableCards[fromIndex];
     const toStack = rebuiltTableCards[toIndex];
     toStack.cards = [...toStack.cards, ...fromStack.cards];
@@ -156,6 +158,38 @@ function restoreTableAfterTurn(game, finalTargetId = null) {
 
 io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id);
+
+  // Relay drag events so opponents can see dragging cursors/cards
+  socket.on('drag card', (payload) => {
+    try {
+      const code = (payload && payload.gameCode) || (socketMap[socket.id] && socketMap[socket.id].gameCode);
+      if (!code) return;
+      // Send to other players in the room (include origin and stackId if present)
+      socket.to(code).emit('opponent drag start', {
+        card: payload.card,
+        x: payload.x || null,
+        y: payload.y || null,
+        origin: payload.origin || null,
+        stackId: payload.stackId || null
+      });
+    } catch (e) { console.warn('drag card relay error', e); }
+  });
+
+  socket.on('drag move', (payload) => {
+    try {
+      const code = (payload && payload.gameCode) || (socketMap[socket.id] && socketMap[socket.id].gameCode);
+      if (!code) return;
+      socket.to(code).emit('opponent drag move', { x: payload.x, y: payload.y, card: payload.card || null, origin: payload.origin || null });
+    } catch (e) { }
+  });
+
+  socket.on('drag end', (payload) => {
+    try {
+      const code = (payload && payload.gameCode) || (socketMap[socket.id] && socketMap[socket.id].gameCode);
+      if (!code) return;
+      socket.to(code).emit('opponent drag end', {});
+    } catch (e) { }
+  });
 
   socket.on('create game', (payload, cb) => {
     if (typeof payload === 'function') {
