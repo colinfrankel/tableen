@@ -568,10 +568,11 @@ socket.on('round over', (data) => {
     return html;
   }
 
+  const opponentLabel = data.opponentName || 'Opponent';
   let html = `<b>Your collected cards:</b><br>${summarize(data.myCards)}<br>`;
-  html += `<b>${data.playerName}'s collected cards:</b><br>${summarize(data.opponentCards)}<br>`;
+  html += `<b>${opponentLabel}'s collected cards:</b><br>${summarize(data.opponentCards)}<br>`;
   html += `<b>Your Tableens:</b> ${data.myTableens || 0}<br>`;
-  html += `<b>${data.playerName}'s Tableens:</b> ${data.opponentTableens || 0}<br>`;
+  html += `<b>${opponentLabel}'s Tableens:</b> ${data.opponentTableens || 0}<br>`;
 
   showStatusModal(`${data.message}<br><br>${html}`);
 
